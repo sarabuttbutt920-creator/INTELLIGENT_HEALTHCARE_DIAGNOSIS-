@@ -1,0 +1,328 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AlbuminSugarLevel {
+  LEVEL_0 @map("0")
+  LEVEL_1 @map("1")
+  LEVEL_2 @map("2")
+  LEVEL_3 @map("3")
+  LEVEL_4 @map("4")
+  LEVEL_5 @map("5")
+}
+
+enum RbcStatus {
+  normal
+  abnormal
+}
+
+enum PcStatus {
+  normal
+  abnormal
+}
+
+enum BacteriaStatus {
+  present
+  notpresent
+}
+
+enum PredictedLabel {
+  CKD
+  NOT_CKD
+  UNKNOWN
+}
+
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum ThreadType {
+  DOCTOR
+  CHATBOT
+}
+
+enum MedicalFileType {
+  LAB_REPORT
+  SCAN_IMAGE
+  OTHER
+}
+
+model User {
+  user_id       BigInt   @id @default(autoincrement())
+  role          UserRole
+  full_name     String   @db.VarChar(120)
+  email         String   @unique @db.VarChar(190)
+  phone         String?  @db.VarChar(30)
+  password_hash String   @db.VarChar(255)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  last_login_at DateTime?
+
+  patient       Patient?
+  doctor        Doctor?
+
+  enteredEncounters PatientEncounter[] @relation("EncounterEnteredBy")
+  chatMessages      ChatMessage[]
+  uploadedFiles     MedicalFile[]
+  visitorLogs       VisitorLog[]
+
+  @@map("users")
+}
+
+model Patient {
+  patient_id               BigInt   @id @default(autoincrement())
+  user_id                  BigInt   @unique
+  gender                   Gender?
+  date_of_birth            DateTime? @db.Date
+  blood_group              String?  @db.VarChar(5)
+  address                  String?  @db.VarChar(255)
+  emergency_contact_name   String?  @db.VarChar(120)
+  emergency_contact_phone  String?  @db.VarChar(30)
+  created_at               DateTime @default(now())
+
+  user        User @relation(fields: [user_id], references: [user_id])
+
+  encounters   PatientEncounter[]
+  appointments Appointment[]
+  chatThreads  ChatThread[]
+  doctorReviews DoctorReview[]
+
+  @@map("patients")
+}
+
+model Doctor {
+  doctor_id          BigInt   @id @default(autoincrement())
+  user_id            BigInt   @unique
+  specialization     String   @db.VarChar(120)
+  license_no         String?  @unique @db.VarChar(80)
+  hospital_name      String?  @db.VarChar(160)
+  experience_years   Int?
+  fee                Decimal  @default(0.00) @db.Decimal(10, 2)
+  bio                String?  @db.Text
+  profile_photo_url  String?  @db.VarChar(300)
+  created_at         DateTime @default(now())
+
+  user         User @relation(fields: [user_id], references: [user_id])
+
+  appointments Appointment[]
+  chatThreads  ChatThread[]
+  clinicalNotes ClinicalNote[]
+  doctorReviews DoctorReview[]
+
+  @@map("doctors")
+}
+
+model PatientEncounter {
+  encounter_id        BigInt   @id @default(autoincrement())
+  patient_id          BigInt
+  entered_by_user_id  BigInt
+  encounter_date      DateTime @default(now())
+  notes               String?  @db.Text
+
+  patient     Patient @relation(fields: [patient_id], references: [patient_id])
+  enteredBy   User    @relation("EncounterEnteredBy", fields: [entered_by_user_id], references: [user_id])
+
+  labResult   KidneyLabResult?
+  report      Report?
+  predictions Prediction[]
+  medicalFiles MedicalFile[]
+  clinicalNotes ClinicalNote[]
+
+  @@index([patient_id])
+  @@index([entered_by_user_id])
+  @@map("patient_encounters")
+}
+
+model KidneyLabResult {
+  lab_id        BigInt   @id @default(autoincrement())
+  encounter_id  BigInt   @unique
+
+  age                     Int?
+  blood_pressure          Int?
+  blood_glucose_random    Decimal? @db.Decimal(6, 2)
+  blood_urea              Decimal? @db.Decimal(6, 2)
+  serum_creatinine        Decimal? @db.Decimal(6, 2)
+  sodium                  Decimal? @db.Decimal(6, 2)
+  potassium               Decimal? @db.Decimal(6, 2)
+  hemoglobin              Decimal? @db.Decimal(6, 2)
+  packed_cell_volume      Decimal? @db.Decimal(6, 2)
+  white_blood_cell_count  Decimal? @db.Decimal(10, 2)
+  red_blood_cell_count    Decimal? @db.Decimal(10, 2)
+
+  albumin          AlbuminSugarLevel?
+  sugar            AlbuminSugarLevel?
+  red_blood_cells  RbcStatus?
+  pus_cell         PcStatus?
+  bacteria         BacteriaStatus?
+  hypertension     Boolean?
+  diabetes_mellitus Boolean?
+
+  created_at     DateTime @default(now())
+
+  encounter      PatientEncounter @relation(fields: [encounter_id], references: [encounter_id])
+
+  @@map("kidney_lab_results")
+}
+
+model Prediction {
+  prediction_id   BigInt   @id @default(autoincrement())
+  encounter_id    BigInt
+  model_name      String   @db.VarChar(80)
+  model_version   String   @db.VarChar(40)
+  predicted_label PredictedLabel
+  risk_score      Decimal? @db.Decimal(5, 4)
+  explanation_json Json?
+  created_at      DateTime @default(now())
+
+  encounter PatientEncounter @relation(fields: [encounter_id], references: [encounter_id])
+
+  @@index([encounter_id])
+  @@map("predictions")
+}
+
+model Report {
+  report_id        BigInt   @id @default(autoincrement())
+  encounter_id     BigInt   @unique
+  summary          String   @db.Text
+  recommendations  String?  @db.Text
+  pdf_url          String?  @db.VarChar(300)
+  created_at       DateTime @default(now())
+
+  encounter PatientEncounter @relation(fields: [encounter_id], references: [encounter_id])
+
+  @@map("reports")
+}
+
+model Appointment {
+  appointment_id   BigInt   @id @default(autoincrement())
+  patient_id       BigInt
+  doctor_id        BigInt
+  scheduled_start  DateTime
+  scheduled_end    DateTime?
+  status           AppointmentStatus @default(REQUESTED)
+  reason           String?  @db.VarChar(255)
+  created_at       DateTime @default(now())
+
+  patient Patient @relation(fields: [patient_id], references: [patient_id])
+  doctor  Doctor  @relation(fields: [doctor_id], references: [doctor_id])
+
+  @@index([doctor_id, scheduled_start])
+  @@index([patient_id, scheduled_start])
+  @@map("appointments")
+}
+
+model ChatThread {
+  thread_id    BigInt   @id @default(autoincrement())
+  patient_id   BigInt
+  doctor_id    BigInt?
+  thread_type  ThreadType
+  created_at   DateTime @default(now())
+
+  patient  Patient @relation(fields: [patient_id], references: [patient_id])
+  doctor   Doctor? @relation(fields: [doctor_id], references: [doctor_id])
+
+  messages ChatMessage[]
+
+  @@index([patient_id])
+  @@index([doctor_id])
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  message_id     BigInt   @id @default(autoincrement())
+  thread_id      BigInt
+  sender_user_id BigInt
+  message_text   String   @db.Text
+  sent_at        DateTime @default(now())
+
+  thread ChatThread @relation(fields: [thread_id], references: [thread_id])
+  sender User       @relation(fields: [sender_user_id], references: [user_id])
+
+  @@index([thread_id, sent_at])
+  @@index([sender_user_id])
+  @@map("chat_messages")
+}
+
+model MedicalFile {
+  file_id            BigInt   @id @default(autoincrement())
+  encounter_id       BigInt
+  uploaded_by_user_id BigInt
+  file_type          MedicalFileType
+  file_url           String   @db.VarChar(400)
+  original_name      String?  @db.VarChar(255)
+  mime_type          String?  @db.VarChar(80)
+  created_at         DateTime @default(now())
+
+  encounter PatientEncounter @relation(fields: [encounter_id], references: [encounter_id])
+  uploader  User             @relation(fields: [uploaded_by_user_id], references: [user_id])
+
+  @@index([encounter_id])
+  @@index([uploaded_by_user_id])
+  @@map("medical_files")
+}
+
+model ClinicalNote {
+  note_id      BigInt   @id @default(autoincrement())
+  encounter_id BigInt
+  doctor_id    BigInt
+  note_text    String   @db.Text
+  created_at   DateTime @default(now())
+
+  encounter PatientEncounter @relation(fields: [encounter_id], references: [encounter_id])
+  doctor    Doctor          @relation(fields: [doctor_id], references: [doctor_id])
+
+  @@index([encounter_id])
+  @@index([doctor_id])
+  @@map("clinical_notes")
+}
+
+model DoctorReview {
+  review_id    BigInt   @id @default(autoincrement())
+  doctor_id    BigInt
+  patient_id   BigInt
+  rating       Int
+  review_text  String?  @db.Text
+  created_at   DateTime @default(now())
+
+  doctor  Doctor  @relation(fields: [doctor_id], references: [doctor_id])
+  patient Patient @relation(fields: [patient_id], references: [patient_id])
+
+  @@unique([doctor_id, patient_id], map: "uniq_review")
+  @@index([doctor_id])
+  @@index([patient_id])
+  @@map("doctor_reviews")
+}
+
+model VisitorLog {
+  visitor_id  BigInt   @id @default(autoincrement())
+  user_id     BigInt?
+  ip_address  String?  @db.VarChar(45)
+  user_agent  String?  @db.VarChar(255)
+  page        String?  @db.VarChar(200)
+  visited_at  DateTime @default(now())
+
+  user User? @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id])
+  @@map("visitor_logs")
+}
