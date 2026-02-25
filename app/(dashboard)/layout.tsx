@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     LayoutDashboard,
@@ -75,6 +75,16 @@ export default function DashboardLayout({
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const router = useRouter();
+
+    const handleLogout = async () => {
+        try {
+            await fetch("/api/auth/logout", { method: "POST" });
+            router.push("/login");
+        } catch (error) {
+            console.error("Logout failed", error);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-surface flex">
@@ -126,10 +136,10 @@ export default function DashboardLayout({
 
                     {/* Bottom Sidebar Content */}
                     <div className="px-3">
-                        <Link href="/login" className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:bg-red-50 hover:text-red-500 transition-all duration-200 group ${!isSidebarOpen && "justify-center"}`}>
+                        <button onClick={handleLogout} className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:bg-red-50 hover:text-red-500 transition-all duration-200 group ${!isSidebarOpen && "justify-center"}`}>
                             <LogOut className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
                             {isSidebarOpen && <span className="text-sm font-medium">Log out</span>}
-                        </Link>
+                        </button>
 
                         <button
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -226,10 +236,10 @@ export default function DashboardLayout({
                                 ))}
                             </nav>
                             <div className="absolute bottom-6 left-6 right-6">
-                                <Link href="/login" className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 text-red-500 font-semibold">
+                                <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 text-red-500 font-semibold hover:bg-red-100 transition-colors">
                                     <LogOut className="w-4 h-4" />
                                     Sign Out
-                                </Link>
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>

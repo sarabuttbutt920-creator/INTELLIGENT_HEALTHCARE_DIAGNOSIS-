@@ -9,17 +9,36 @@ import { useRouter } from "next/navigation";
 export default function LoginPage() {
     const [role, setRole] = useState<"PATIENT" | "DOCTOR" | "ADMIN">("PATIENT");
     const [showPassword, setShowPassword] = useState(false);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [errorMsg, setErrorMsg] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMsg("");
         setIsLoading(true);
-        // Simulate login delay
-        setTimeout(() => {
+        try {
+            const res = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                // If login yields correct role, proceed
+                const userRole = data.data.role.toLowerCase();
+                router.push(`/${userRole}`);
+            } else {
+                setErrorMsg(data.message || "Invalid credentials provided.");
+                setIsLoading(false);
+            }
+        } catch (err) {
+            setErrorMsg("An unexpected error occurred connecting to the server.");
             setIsLoading(false);
-            router.push(`/${role.toLowerCase()}`);
-        }, 1500);
+        }
     };
 
     return (
@@ -45,6 +64,12 @@ export default function LoginPage() {
                     Please sign in to access your dashboard
                 </motion.p>
             </div>
+
+            {errorMsg && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 relative z-10 bg-rose-50 text-rose-600 rounded-lg text-sm font-semibold border border-rose-100 flex items-center justify-center">
+                    {errorMsg}
+                </motion.div>
+            )}
 
             {/* Role Switcher */}
             <motion.div
@@ -103,6 +128,8 @@ export default function LoginPage() {
                         <input
                             id="email"
                             type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             placeholder="name@example.com"
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border border-border-light focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-sm shadow-sm"
                             required
@@ -129,6 +156,8 @@ export default function LoginPage() {
                         <input
                             id="password"
                             type={showPassword ? "text" : "password"}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                             placeholder="Enter your password"
                             className="w-full pl-12 pr-12 py-3.5 rounded-2xl bg-white border border-border-light focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-sm shadow-sm"
                             required

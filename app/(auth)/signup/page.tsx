@@ -7,17 +7,40 @@ import { Mail, Lock, User, UserCircle, ShieldCheck, ArrowRight, Phone, Stethosco
 import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
-    const [role, setRole] = useState<"PATIENT" | "DOCTOR" | "ADMIN">("PATIENT");
+    const [role, setRole] = useState<"PATIENT" | "DOCTOR">("PATIENT");
+    const [fullname, setFullname] = useState("");
+    const [email, setEmail] = useState("");
+    const [phone, setPhone] = useState("");
+    const [password, setPassword] = useState("");
+    const [errorMsg, setErrorMsg] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMsg("");
+
         setIsLoading(true);
-        setTimeout(() => {
+
+        try {
+            const res = await fetch("/api/auth/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ fullName: fullname, email, phone, password, role })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                // Pre-route successful signup logs
+                router.push(`/${role.toLowerCase()}`);
+            } else {
+                setErrorMsg(data.message || "Registration failed. Please try again.");
+                setIsLoading(false);
+            }
+        } catch (err) {
+            setErrorMsg("An unexpected server failure occurred.");
             setIsLoading(false);
-            router.push(`/${role.toLowerCase()}`);
-        }, 1500);
+        }
     };
 
     return (
@@ -43,6 +66,12 @@ export default function SignupPage() {
                     Join our community for better kidney health
                 </motion.p>
             </div>
+
+            {errorMsg && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 relative z-10 bg-rose-50 text-rose-600 rounded-lg text-sm font-semibold border border-rose-100 flex items-center justify-center">
+                    {errorMsg}
+                </motion.div>
+            )}
 
             {/* Role Switcher */}
             <motion.div
@@ -73,17 +102,6 @@ export default function SignupPage() {
                     <Stethoscope className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${role === "DOCTOR" ? "scale-110" : ""}`} />
                     Doctor
                 </button>
-                <button
-                    onClick={() => setRole("ADMIN")}
-                    type="button"
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 ${role === "ADMIN"
-                        ? "bg-white text-primary shadow-lg shadow-black/5"
-                        : "text-text-muted hover:text-text-secondary"
-                        }`}
-                >
-                    <ShieldCheck className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${role === "ADMIN" ? "scale-110" : ""}`} />
-                    Admin
-                </button>
             </motion.div>
 
             <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
@@ -101,6 +119,8 @@ export default function SignupPage() {
                         <input
                             id="fullname"
                             type="text"
+                            value={fullname}
+                            onChange={(e) => setFullname(e.target.value)}
                             placeholder="John Doe"
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border border-border-light focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-sm shadow-sm"
                             required
@@ -122,6 +142,8 @@ export default function SignupPage() {
                         <input
                             id="email"
                             type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             placeholder="name@example.com"
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border border-border-light focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-sm shadow-sm"
                             required
@@ -143,6 +165,8 @@ export default function SignupPage() {
                         <input
                             id="phone"
                             type="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
                             placeholder="+92 300 0000000"
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border border-border-light focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-sm shadow-sm"
                             required
@@ -164,6 +188,8 @@ export default function SignupPage() {
                         <input
                             id="password"
                             type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                             placeholder="Min. 8 characters"
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border border-border-light focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-sm shadow-sm"
                             required
