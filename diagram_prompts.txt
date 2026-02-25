@@ -1,0 +1,340 @@
+==================================================
+DIAGRAM GENERATION PROMPTS FOR MEDI INTEL PROJECT
+==================================================
+Below are the separate prompts you can copy and paste to any AI (like ChatGPT, Claude, etc.) to generate the code (e.g., PlantUML, Mermaid) or descriptions for each diagram, tailored exactly to your Next.js and Prisma system architecture.
+
+--------------------------------------------------
+1. Network Diagram
+--------------------------------------------------
+Generate a Network Diagram for the "Intelligent Healthcare Diagnosis System".
+The architecture consists of:
+- Client Device: Web browsers (Mobile/Desktop) accessing the system.
+- Frontend Server: Next.js server rendering the React UI.
+- Backend API Server: Next.js API Routes (Node.js) handling backend logic, connected to the Frontend Server.
+- AI Prediction Engine: A service (or integrated Next.js route) that processes ML models for Kidney Disease Prediction.
+- Database Server: A MySQL database connected via Prisma ORM.
+Please show the communication protocols (HTTPS for client-server, TCP/IP for DB connection) and structure it as a clean visual layout using Mermaid.js or PlantUML.
+
+--------------------------------------------------
+2. Data Flow Diagram Level 0 (Context Diagram)
+--------------------------------------------------
+Generate a Level 0 Data Flow Diagram (Context Diagram) for the "Intelligent Healthcare Diagnosis System".
+Actors:
+- Patient
+- Doctor
+- Admin
+- Chatbot System
+Main Process: Intelligent Healthcare Diagnosis System (Center)
+Data Flows:
+- Patient provides: Auth details, Lab results, Appointment requests, Chat messages.
+- Patient receives: Kidney prediction results, Medical reports, Appointment statuses.
+- Doctor provides: Clinical notes, Appointment availability/confirmations, Chat messages.
+- Doctor receives: Patient history, Lab results, System notifications.
+- Admin provides: User configurations, System settings.
+- Admin receives: System usage logs, User lists.
+Please use PlantUML or Mermaid.js format to generate this Context Diagram.
+
+--------------------------------------------------
+3. Data Flow Diagram Level 1
+--------------------------------------------------
+Generate a Level 1 Data Flow Diagram for the "Intelligent Healthcare Diagnosis System".
+Decompose the system into the following main processes:
+1.0 Authentication & User Management
+2.0 Appointment Management
+3.0 Kidney Disease Prediction System
+4.0 Medical Reporting & File Management
+5.0 Chat & Communication (Text & Chatbot)
+Include Actors (Patient, Doctor, Admin) and Data Stores (Users DB, Appointments DB, Encounters/LabResults DB, Chat DB, Files/Reports DB).
+Map the data flows between the actors, processes, and data stores based on standard healthcare application logic. Include specific entities like "KidneyLabResult" and "Prediction". Show this using PlantUML format.
+
+--------------------------------------------------
+4. Data Flow Diagram Level 2
+--------------------------------------------------
+Generate a Level 2 Data Flow Diagram focusing specifically on the "3.0 Kidney Disease Prediction System" module of our healthcare application.
+Sub-processes:
+3.1 Gather Lab Results (Blood pressure, Serum creatinine, Albumin, etc.)
+3.2 Validate & Pre-process Data
+3.3 Run ML Prediction Model
+3.4 Generate Prediction & Risk Score
+3.5 Save Result to Patient Encounter DB
+Actors: Patient, Doctor.
+Data Stores: PatientEncounter DB, KidneyLabResult DB, Prediction DB.
+Detail the data flow from the moment the patient submits their lab inputs to the moment the prediction is stored and presented. Use PlantUML format.
+
+--------------------------------------------------
+5. High Level Use Case Diagram
+--------------------------------------------------
+Generate a High-Level Use Case Diagram for a Healthcare Diagnosis System.
+Actors: Patient, Doctor, Admin.
+Main Use Cases:
+- Manage Account (All)
+- Book Appointment (Patient)
+- Manage Appointments (Doctor, Admin)
+- Generate Kidney Disease Prediction (Patient)
+- View Patient History (Doctor)
+- Chat Consultation (Patient, Doctor)
+- System Administration (Admin)
+Please structure this as a PlantUML use case diagram code, showing inheritance or includes/extends where appropriate.
+
+--------------------------------------------------
+6. Administrative Use Case Diagram
+--------------------------------------------------
+Generate a detailed Use Case Diagram for the 'Admin' actor in the Intelligent Healthcare Diagnosis System.
+Actor: Admin
+Use Cases:
+- Login to Admin Dashboard
+- Manage System Users (CRUD for Patients, Doctors)
+- View Visitor Logs (IP address, pages visited)
+- Monitor System Statistics and Active Appointments
+- Deactivate/Activate User Accounts
+aLSO to structure the diagram, making sure to show `<<include>>` relationships for login and verification steps.
+
+--------------------------------------------------
+7. Developer Use Case Diagram
+--------------------------------------------------
+Generate a Use Case Diagram for a 'Developer/System Maintainer' actor in the context of our Next.js/MySQL Healthcare Prediction application.
+Actor: Developer / Maintainer
+Use Cases:
+- Monitor Server Health & Next.js Build Logs
+- Manage Database Migrations (Prisma)
+- Deploy ML Model Updates
+- Monitor Error/Crash Reports
+- Access System Audit Trails
+Provide the generated code in PlantUML format.
+
+--------------------------------------------------
+8. System Level Use Case Diagram
+--------------------------------------------------
+Generate a comprehensive System Level Use Case Diagram for the Intelligent Healthcare Diagnosis System using PlantUML.
+Include all actors: Admin, Doctor, Patient, and Automated Chatbot.
+Include boundaries for the system.
+Show comprehensive relationships where Patient and Doctor interact over Use Cases like "Manage Appointment" and "Exchange Chat Messages". Show Patient interacting with "Submit Lab Data" which `<<includes>>` "Generate ML Prediction". Include Admin's system oversight use cases.
+
+--------------------------------------------------
+9. Doctor Use Case Diagram
+--------------------------------------------------
+Generate a specific Use Case Diagram for the 'Doctor' actor in a Healthcare Diagnosis Prediction app.
+Actor: Doctor
+Use Cases:
+- Access Doctor Dashboard
+- Update Specialization & Profile
+- Manage Appointment Schedule (Confirm/Cancel)
+- View Patient Encounters & Lab Results (KidneyLabResult)
+- Write Clinical Notes
+- Respond to Patient Chat Messages
+- Review AI Prediction Reports
+Output the result in PlantUML.
+
+--------------------------------------------------
+10. Patient Use Case Diagram
+--------------------------------------------------
+Generate a specific Use Case Diagram for the 'Patient' actor in a Healthcare Diagnosis Prediction app.
+Actor: Patient
+Use Cases:
+- Register/Login securely
+- View Patient Dashboard
+- Request New Appointment with Doctor
+- Input Kidney Lab Data for Prediction
+- View AI Disease Risk Score & Explanation
+- Upload Medical Files (Lab Reports, Scan Images)
+- Chat with Doctor or AI Chatbot
+- Give Doctor Review/Rating
+Output the result in PlantUML.
+
+--------------------------------------------------
+11. Chatbot Use Case Diagram
+--------------------------------------------------
+Generate a Use Case Diagram for the 'Chatbot' component of our healthcare system.
+Actor: System Chatbot (or AI Assistant)
+Secondary Actor: Patient
+Use Cases:
+- Receive Patient Inquiry
+- Analyze Symptom Keywords
+- Provide Automated Medical Guidance (Disclaimer applied)
+- Suggest Prediction Form based on Symptoms
+- Escalate to Human Doctor
+Output the result in PlantUML.
+
+--------------------------------------------------
+12. Domain Model
+--------------------------------------------------
+Generate a precise Domain Model Diagram using PlantUML based on the exact entities in my Prisma schema:
+Entities: 
+- User (user_id, role, full_name, email, is_active)
+- Patient (patient_id, gender, dob, blood_group)
+- Doctor (doctor_id, specialization, license_no, experience_years)
+- PatientEncounter (encounter_date, notes)
+- KidneyLabResult (blood_pressure, serum_creatinine, albumin, sugar, red_blood_cells, bacteria, etc.)
+- Prediction (model_name, predicted_label[CKD, NOT_CKD], risk_score)
+- Report (summary, pdf_url)
+- Appointment (scheduled_start, status)
+- ChatThread & ChatMessage
+- MedicalFile (file_type, file_url)
+- ClinicalNote
+Relationships:
+- User is 1-to-1 with Patient or Doctor.
+- Patient has many Appointments, Encounters, and ChatThreads.
+- Doctor has many Appointments, ClinicalNotes, and ChatThreads.
+- PatientEncounter is 1-to-1 with KidneyLabResult and Report, and 1-to-many with Predictions and MedicalFiles.
+
+--------------------------------------------------
+13. System Sequence Diagram
+--------------------------------------------------
+Generate a System Sequence Diagram (SSD) for the highest-value flow: "Patient performing a Kidney Disease Prediction".
+Actors: Patient, System (Next.js App).
+Steps:
+1. Patient navigates to Prediction Page.
+2. System displays input form for lab results.
+3. Patient submits Lab Result values (blood pressure, albumin, etc.).
+4. System validates the inputs.
+5. System calculates the prediction.
+6. System saves the Encounter, KidneyLabResult, and Prediction to the Database.
+7. System generates a Report and displays the final Prediction Label (CKD / NOT_CKD) to the Patient.
+Use PlantUML `sequenceDiagram` format.
+
+--------------------------------------------------
+14. Admin Panel Sequence Diagram
+--------------------------------------------------
+Generate a Sequence Diagram for an Admin Panel action: "Admin disabling a User account".
+Participants: Admin, AdminUI (React), User API (Next.js), Database (MySQL).
+Steps:
+1. Admin clicks on User Management in Dashboard.
+2. AdminUI requests the list of Users from User API.
+3. Database returns User list.
+4. Admin clicks "Deactivate" on a specific user.
+5. AdminUI sends PUT request with is_active=false to API.
+6. API updates the User record in Database.
+7. Database confirms update.
+8. API logs action in VisitorLog/Audit.
+9. AdminUI shows success toast.
+Use PlantUML format.
+
+--------------------------------------------------
+15. Patient Sequence Diagram
+--------------------------------------------------
+Generate a Sequence Diagram for the Patient action: "Booking an Appointment".
+Participants: Patient, PatientUI, AppointmentAPI, Database.
+Steps:
+1. Patient opens 'Appointments' page.
+2. PatientUI fetches a list of available Doctors.
+3. Patient selects a Doctor and a Time Slot (scheduled_start).
+4. Patient submits the appointment request with a reason.
+5. AppointmentAPI validates the slot.
+6. AppointmentAPI creates an Appointment record with status=REQUESTED in Database.
+7. System returns confirmation to PatientUI.
+Use PlantUML format.
+
+--------------------------------------------------
+16. Doctor Sequence Diagram
+--------------------------------------------------
+Generate a Sequence Diagram for the Doctor action: "Adding a Clinical Note to a Patient Encounter".
+Participants: Doctor, DoctorUI, EncounterAPI, Database.
+Steps:
+1. Doctor selects an active Patient Encounter from their dashboard.
+2. Doctor types clinical observations and hits 'Save Note'.
+3. DoctorUI sends POST request to EncounterAPI with note_text, encounter_id, and doctor_id.
+4. EncounterAPI validates the doctor's authorization for this patient.
+5. EncounterAPI saves the ClinicalNote to the Database.
+6. Database returns the inserted Note ID.
+7. EncounterAPI returns success, and DoctorUI updates the notes list.
+Use PlantUML format.
+
+--------------------------------------------------
+17. Collaboration Diagram
+--------------------------------------------------
+Generate a Collaboration Diagram (Communication Diagram) demonstrating the interaction flow for "Generating a Medical Report".
+Objects involved: Patient UI, NextJS Backend, Prediction Engine, Database, Report Generator.
+Flow:
+1. UI sends request for Encounter details.
+2. Backend queries Database for PatientEncounter, KidneyLabResult, and Prediction.
+3. Backend passes data to Report Generator.
+4. Report Generator creates a PDF summary and uploads it to storage (MedicalFile).
+5. Report record is saved to Database.
+6. UI receives the PDF URL to display to the Patient.
+Provide this in PlantUML syntax.
+
+--------------------------------------------------
+18. Class Diagram
+--------------------------------------------------
+Generate a detailed Class Diagram using PlantUML for the healthcare system strictly following this Prisma schema mapping:
+Classes/Models:
+- User (user_id, role, email, password_hash, is_active)
+- Patient (patient_id, gender, dob, blood_group)
+- Doctor (doctor_id, specialization, license_no, fee)
+- PatientEncounter (encounter_id, encounter_date, notes)
+- KidneyLabResult (blood_glucose_random, blood_urea, serum_creatinine, sodium, potassium, hemoglobin, white_blood_cell_count...)
+- Prediction (prediction_id, model_name, predicted_label, risk_score)
+- Appointment (scheduled_start, status, reason)
+- MedicalFile (file_type, file_url)
+Ensure you indicate the relationships (associations) with multiplicity (e.g., 1 to 1..*, 1 to 1) exactly as defined in standard ORM relational design.
+
+--------------------------------------------------
+19. Admin State Chart Diagram
+--------------------------------------------------
+Generate a State Machine Diagram for the 'Admin Session Lifecycle' in the application.
+States: 
+- LoggedOut
+- Authenticating
+- LoggedIn / Dashboard View
+- ManagingUsersState
+- ViewingSystemLogsState
+Transitions:
+- LoggedOut -> Authenticating (submits credentials)
+- Authenticating -> LoggedIn (valid credentials)
+- LoggedIn -> ManagingUsersState (clicks Users tab)
+- ManagingUsersState -> LoggedIn (returns to home)
+- LoggedIn -> LoggedOut (clicks logout button or session expires)
+Use PlantUML format.
+
+--------------------------------------------------
+20. Patient State Chart Diagram
+--------------------------------------------------
+Generate a State Machine Diagram for a Patient's 'Appointment Lifecycle' in the system.
+States:
+- Initialization (Form open)
+- Requested (Appointment submitted, waiting for doctor)
+- Confirmed (Doctor accepted)
+- InProgress (Meeting happening)
+- Completed (Consultation done)
+- Cancelled (If rejected by doctor or cancelled by patient)
+Show transitions based on triggers like: submit request, doctor approves, time passes, doctor finishes notes. Use PlantUML format.
+
+--------------------------------------------------
+21. Doctor State Chart Diagram
+--------------------------------------------------
+Generate a State Machine Diagram for a Doctor's 'Patient Encounter / Consultation' phase.
+States:
+- Idle (Viewing Schedule)
+- EncounterStarted (Opened Patient file)
+- ReviewingHistory (Checking past Lab Results/Predictions)
+- WritingNotes (Drafting Clinical Notes)
+- EncounterClosed (Notes saved, consultation marked Complete)
+Show the flow of a doctor processing a single diagnosis visit. Use PlantUML format.
+
+--------------------------------------------------
+22. Sitemap (Website Architecture Diagram)
+--------------------------------------------------
+Generate a visual Sitemap using Mermaid or PlantUML Mindmap/WBS format based on the actual Next.js App Router structure:
+Root: /
+Auth Flow:
+- /auth/login
+- /auth/register
+Patient Dashboard (/patient):
+- /patient/profile
+- /patient/prediction
+- /patient/appointments
+- /patient/history
+- /patient/reports
+- /patient/files
+- /patient/chat
+Doctor Dashboard (/doctor):
+- /doctor/profile
+- /doctor/schedule
+- /doctor/patients
+- /doctor/chat
+Admin Dashboard (/admin):
+- /admin/users
+- /admin/doctors
+- /admin/settings
+Make it clean and hierarchical.
+==================================================
