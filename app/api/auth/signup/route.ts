@@ -5,7 +5,8 @@ import { z } from 'zod';
 
 const signupSchema = z.object({
     fullName: z.string().min(2, "Full name must be at least 2 characters"),
-    email: z.string().email("Invalid email format"),
+    email: z.string().email("Invalid email format").transform(str => str.toLowerCase().trim()),
+    phone: z.string().optional(),
     password: z.string()
         .min(8, "Password must be at least 8 characters")
         .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
             );
         }
 
-        const { fullName, email, password, role } = validationResult.data;
+        const { fullName, email, phone, password, role } = validationResult.data;
 
         // Check for duplicates
         const existingUser = await prisma.user.findUnique({
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
                 data: {
                     full_name: fullName,
                     email,
+                    phone,
                     password_hash,
                     role,
                     is_active: true,

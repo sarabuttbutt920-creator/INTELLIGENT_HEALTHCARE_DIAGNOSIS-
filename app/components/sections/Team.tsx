@@ -8,53 +8,53 @@ import Image from "next/image";
 /* Filter categories */
 const categories = [
     "All",
-    "Cardiologist",
-    "Neurologist",
-    "Dermatologist",
-    "Dental Care",
-    "Pediatric",
+    "Nephrology",
+    "Urology",
+    "Renal Dietetics",
+    "Dialysis Care",
+    "Transplant Surgery",
 ];
 
 /* Team members data */
 const teamMembers = [
     {
-        name: "Comprehensive Heart Care",
-        category: "Cardiologist",
+        name: "Comprehensive Kidney Care",
+        category: "Nephrology",
         description:
-            "Our cardiology team provides advanced diagnostic and treatment services for all heart-related conditions using cutting-edge technology.",
+            "Our nephrology team provides advanced diagnostic and treatment services for all kidney-related conditions.",
         image: "/images/img1.jpg",
     },
     {
-        name: "Brain & Nerve Specialists",
-        category: "Neurologist",
+        name: "Urinary Tract Specialists",
+        category: "Urology",
         description:
-            "Expert neurologists offering advanced neurological care with state-of-the-art diagnostic imaging and treatment protocols.",
+            "Expert urologists offering advanced urinary and renal care with state-of-the-art diagnostic imaging.",
         image: "/images/img2.jpg",
     },
     {
-        name: "Skin Health Experts",
-        category: "Dermatologist",
+        name: "Kidney Health Nutrition",
+        category: "Renal Dietetics",
         description:
-            "Dedicated dermatology team providing comprehensive skin care, from routine check-ups to advanced cosmetic procedures.",
+            "Dedicated renal dietitians providing comprehensive nutritional care, from personalized meal plans to disease management.",
         image: "/images/img3.jpg",
     },
     {
-        name: "Advanced Dental Services",
-        category: "Dental Care",
+        name: "Advanced Dialysis Services",
+        category: "Dialysis Care",
         description:
-            "Full-service dental care from preventive dentistry to cosmetic and restorative treatments with modern equipment.",
+            "Full-service dialysis care providing hemodialysis and peritoneal dialysis with modern, comfortable equipment.",
         image: "/images/img4.jpg",
     },
     {
-        name: "Child Health Specialists",
-        category: "Pediatric",
+        name: "Renal Transplant Specialists",
+        category: "Transplant Surgery",
         description:
-            "Compassionate pediatric care ensuring healthy growth and development for children of all ages.",
+            "Compassionate transplant care ensuring comprehensive evaluation and post-transplant support for patients.",
         image: "/images/img5.jpg",
     },
     {
         name: "Kidney Disease Research",
-        category: "Neurologist",
+        category: "Nephrology",
         description:
             "Pioneering research in chronic kidney disease using AI-driven predictive models for early detection and prevention.",
         image: "/images/img6.jpg",
@@ -82,11 +82,11 @@ export default function Team() {
                     className="text-center max-w-2xl mx-auto mb-12"
                 >
                     <span className="inline-block px-3 py-1 rounded-full bg-purple-100 text-primary text-xs font-semibold uppercase tracking-wider mb-4">
-                        Our Team
+                        Our Services
                     </span>
                     <h2 className="text-3xl sm:text-4xl font-bold text-text-primary leading-tight">
-                        Our Team of Highly Trained{" "}
-                        <span className="gradient-text">Medical Professionals</span>
+                        Our Specialized{" "}
+                        <span className="gradient-text">Kidney Care Services</span>
                     </h2>
                 </motion.div>
 

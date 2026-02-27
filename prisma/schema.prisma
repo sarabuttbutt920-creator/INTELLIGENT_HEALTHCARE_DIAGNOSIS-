@@ -56,6 +56,15 @@ enum AppointmentStatus {
   CANCELLED
 }
 
+enum DoctorVerificationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
 enum ThreadType {
   DOCTOR
   CHATBOT
@@ -116,10 +125,30 @@ model Doctor {
   specialization     String   @db.VarChar(120)
   license_no         String?  @unique @db.VarChar(80)
   hospital_name      String?  @db.VarChar(160)
+  clinic_address     String?  @db.VarChar(255)
+  consultation_hours String?  @db.VarChar(255)
   experience_years   Int?
   fee                Decimal  @default(0.00) @db.Decimal(10, 2)
   bio                String?  @db.Text
   profile_photo_url  String?  @db.VarChar(300)
+
+  gender             Gender?
+  date_of_birth      DateTime? @db.Date
+  nationality        String?  @db.VarChar(100)
+  
+  license_expiry_date DateTime? @db.Date
+  license_cert_url    String?  @db.VarChar(300)
+  
+  degree             String?  @db.VarChar(100)
+  university_name    String?  @db.VarChar(150)
+  graduation_year    Int?
+  degree_cert_url    String?  @db.VarChar(300)
+
+  sub_specialty             String?  @db.VarChar(120)
+  professional_memberships  String?  @db.Text
+  govt_id_url               String?  @db.VarChar(300)
+
+  verification_status DoctorVerificationStatus @default(DRAFT)
   created_at         DateTime @default(now())
 
   user         User @relation(fields: [user_id], references: [user_id])

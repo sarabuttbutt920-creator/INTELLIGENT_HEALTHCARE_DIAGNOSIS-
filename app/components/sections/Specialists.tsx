@@ -7,22 +7,22 @@ import Image from "next/image";
 /* Specialists data */
 const specialists = [
     {
-        name: "Dr. Sarah Mitchell",
-        specialty: "Nephrologist",
+        name: "Doctor 1",
+        specialty: "Nephrologist, Hospital ABC",
         rating: 4.9,
         reviews: 124,
         image: "/images/img5.jpg",
     },
     {
-        name: "Dr. James Anderson",
-        specialty: "Urologist",
+        name: "Doctor 2",
+        specialty: "Urologist, Hospital ABC",
         rating: 4.8,
         reviews: 98,
         image: "/images/img6.jpg",
     },
     {
-        name: "Dr. Emily Roberts",
-        specialty: "Cardiologist",
+        name: "Doctor 3",
+        specialty: "Renal Specialist, Hospital ABC",
         rating: 4.9,
         reviews: 156,
         image: "/images/img7.jpg",

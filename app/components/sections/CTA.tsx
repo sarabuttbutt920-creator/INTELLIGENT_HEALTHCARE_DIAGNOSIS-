@@ -31,12 +31,12 @@ export default function CTA() {
                         {/* Heading */}
                         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-3xl mx-auto mb-6">
                             Join Our Team of Dedicated{" "}
-                            <span className="text-purple-300">Healthcare Professionals</span>
+                            <span className="text-purple-300">Kidney Care Specialists</span>
                         </h2>
 
                         {/* Subtext */}
                         <p className="text-lg text-gray-300 max-w-xl mx-auto mb-10">
-                            Together we can revolutionize healthcare diagnosis using AI
+                            Together we can revolutionize kidney disease diagnosis using AI
                             technology and save millions of lives worldwide.
                         </p>
 
