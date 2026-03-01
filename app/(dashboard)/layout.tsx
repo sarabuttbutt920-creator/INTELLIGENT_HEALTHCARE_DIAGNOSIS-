@@ -44,10 +44,10 @@ const sidebarLinks = {
         { label: "Dashboard", icon: LayoutDashboard, href: "/patient" },
         { label: "My Profile", icon: User, href: "/patient/profile" },
         { label: "New Prediction", icon: Activity, href: "/patient/prediction" },
+        { label: "Medical Imaging", icon: FileImage, href: "/patient/files" },
         { label: "My Reports", icon: FileText, href: "/patient/reports" },
         { label: "Appointments", icon: Calendar, href: "/patient/appointments" },
         { label: "Chat", icon: MessageSquare, href: "/patient/chat" },
-        { label: "Upload Medical Files", icon: Upload, href: "/patient/files" },
         { label: "Medical History", icon: History, href: "/patient/history" },
     ],
     DOCTOR: [
