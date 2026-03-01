@@ -207,9 +207,12 @@ export default function VisitorLogsPage() {
     );
 
     // Reset pagination when filters change
-    useEffect(() => {
+    const filterKey = `${searchTerm}-${severityFilter}-${eventFilter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+    if (filterKey !== prevFilterKey) {
+        setPrevFilterKey(filterKey);
         setCurrentPage(1);
-    }, [searchTerm, severityFilter, eventFilter]);
+    }
 
     // Aggregate Stats
     const totalEvents24h = logs.length;
@@ -289,8 +292,8 @@ export default function VisitorLogsPage() {
                         <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-medium ${isFilterOpen || severityFilter !== "ALL" || eventFilter !== "ALL"
-                                    ? "bg-slate-100 border-slate-300 text-slate-800"
-                                    : "bg-white border-border-light text-text-secondary hover:bg-surface"
+                                ? "bg-slate-100 border-slate-300 text-slate-800"
+                                : "bg-white border-border-light text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             <Filter className="w-4 h-4" />
@@ -498,8 +501,8 @@ export default function VisitorLogsPage() {
                                     key={idx}
                                     onClick={() => setCurrentPage(idx + 1)}
                                     className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${currentPage === idx + 1
-                                            ? "bg-slate-800 text-white shadow-sm"
-                                            : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                                        ? "bg-slate-800 text-white shadow-sm"
+                                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                                         }`}
                                 >
                                     {idx + 1}

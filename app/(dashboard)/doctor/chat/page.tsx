@@ -212,11 +212,13 @@ export default function DoctorChatPage() {
     const filteredChats = chats.filter(c => c.patientName.toLowerCase().includes(searchTerm.toLowerCase()));
 
     // Mark as read when opening
-    useEffect(() => {
+    const [prevReadChatId, setPrevReadChatId] = useState(activeChatId);
+    if (activeChatId !== prevReadChatId || (activeChat && activeChat.unreadCount > 0)) {
+        setPrevReadChatId(activeChatId);
         if (activeChat && activeChat.unreadCount > 0) {
             setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, unreadCount: 0 } : c));
         }
-    }, [activeChatId, activeChat]);
+    }
 
     // Formatting Helpers
     const formatMessageTime = (isoString: string) => {

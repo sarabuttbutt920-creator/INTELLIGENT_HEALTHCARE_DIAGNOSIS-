@@ -112,9 +112,12 @@ export default function ManageUsersPage() {
     }, [currentPage, searchTerm, roleFilter, statusFilter]);
 
     // Reset pagination when filters change
-    useEffect(() => {
+    const filterKey = `${searchTerm}-${roleFilter}-${statusFilter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+    if (filterKey !== prevFilterKey) {
+        setPrevFilterKey(filterKey);
         setCurrentPage(1);
-    }, [searchTerm, roleFilter, statusFilter]);
+    }
 
     // --- Actions ---
     const toggleUserStatus = async (user: User) => {

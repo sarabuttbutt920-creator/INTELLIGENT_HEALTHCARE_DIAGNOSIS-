@@ -201,15 +201,19 @@ export default function DoctorPatientsPage() {
     );
 
     // Reset pagination when filters change
-    useEffect(() => {
+    const filterKey = `${searchTerm}-${riskFilter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+    if (filterKey !== prevFilterKey) {
+        setPrevFilterKey(filterKey);
         setCurrentPage(1);
-    }, [searchTerm, riskFilter]);
+    }
 
     // Aggregate Stats
+    const [renderTime] = useState(() => Date.now());
     const totalPatientsCount = patients.length;
     const highRiskCount = patients.filter(p => p.riskStatus === "HIGH_RISK").length;
     const pendingScansCount = patients.filter(p => p.riskStatus === "PENDING_SCAN").length;
-    const returningThisWeek = patients.filter(p => p.nextAppointment && (parseISO(p.nextAppointment).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000)).length;
+    const returningThisWeek = patients.filter(p => p.nextAppointment && (parseISO(p.nextAppointment).getTime() - renderTime < 7 * 24 * 60 * 60 * 1000)).length;
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-10">
@@ -280,8 +284,8 @@ export default function DoctorPatientsPage() {
                         <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-medium ${isFilterOpen || riskFilter !== "ALL"
-                                    ? "bg-primary/5 border-primary/20 text-primary"
-                                    : "bg-white border-border-light text-text-secondary hover:bg-surface"
+                                ? "bg-primary/5 border-primary/20 text-primary"
+                                : "bg-white border-border-light text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             <Filter className="w-4 h-4" />
@@ -473,8 +477,8 @@ export default function DoctorPatientsPage() {
                             key={idx}
                             onClick={() => setCurrentPage(idx + 1)}
                             className={`w-10 h-10 rounded-xl text-sm font-semibold transition-colors ${currentPage === idx + 1
-                                    ? "gradient-primary text-white shadow-md shadow-primary/20"
-                                    : "border border-border-light bg-white text-text-secondary hover:bg-surface"
+                                ? "gradient-primary text-white shadow-md shadow-primary/20"
+                                : "border border-border-light bg-white text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             {idx + 1}

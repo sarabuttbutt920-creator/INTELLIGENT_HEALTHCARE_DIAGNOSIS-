@@ -217,9 +217,12 @@ export default function MySchedulePage() {
     );
 
     // Reset pagination when filters change
-    useEffect(() => {
+    const filterKey = `${searchTerm}-${statusFilter}-${typeFilter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+    if (filterKey !== prevFilterKey) {
+        setPrevFilterKey(filterKey);
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, typeFilter]);
+    }
 
     // Aggregate Stats
     const totalApts = appointments.length;
@@ -347,8 +350,8 @@ export default function MySchedulePage() {
                         <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-medium ${isFilterOpen || statusFilter !== "ALL" || typeFilter !== "ALL"
-                                    ? "bg-primary/5 border-primary/20 text-primary"
-                                    : "bg-white border-border-light text-text-secondary hover:bg-surface"
+                                ? "bg-primary/5 border-primary/20 text-primary"
+                                : "bg-white border-border-light text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             <Filter className="w-4 h-4" />
@@ -560,8 +563,8 @@ export default function MySchedulePage() {
                             key={idx}
                             onClick={() => setCurrentPage(idx + 1)}
                             className={`w-10 h-10 rounded-xl text-sm font-semibold transition-colors ${currentPage === idx + 1
-                                    ? "gradient-primary text-white shadow-md shadow-primary/20"
-                                    : "border border-border-light bg-white text-text-secondary hover:bg-surface"
+                                ? "gradient-primary text-white shadow-md shadow-primary/20"
+                                : "border border-border-light bg-white text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             {idx + 1}

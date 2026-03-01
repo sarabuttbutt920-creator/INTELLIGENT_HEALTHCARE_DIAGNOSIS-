@@ -198,9 +198,12 @@ export default function DoctorEncountersPage() {
     );
 
     // Reset pagination when filters change
-    useEffect(() => {
+    const filterKey = `${searchTerm}-${resultFilter}-${statusFilter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+    if (filterKey !== prevFilterKey) {
+        setPrevFilterKey(filterKey);
         setCurrentPage(1);
-    }, [searchTerm, resultFilter, statusFilter]);
+    }
 
     // Aggregate Stats
     const totalEncounters = encounters.length;
@@ -277,8 +280,8 @@ export default function DoctorEncountersPage() {
                         <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-medium ${isFilterOpen || resultFilter !== "ALL" || statusFilter !== "ALL"
-                                    ? "bg-primary/5 border-primary/20 text-primary"
-                                    : "bg-white border-border-light text-text-secondary hover:bg-surface"
+                                ? "bg-primary/5 border-primary/20 text-primary"
+                                : "bg-white border-border-light text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             <Filter className="w-4 h-4" />
@@ -485,8 +488,8 @@ export default function DoctorEncountersPage() {
                             key={idx}
                             onClick={() => setCurrentPage(idx + 1)}
                             className={`w-10 h-10 rounded-xl text-sm font-semibold transition-colors ${currentPage === idx + 1
-                                    ? "gradient-primary text-white shadow-md shadow-primary/20"
-                                    : "border border-border-light bg-white text-text-secondary hover:bg-surface"
+                                ? "gradient-primary text-white shadow-md shadow-primary/20"
+                                : "border border-border-light bg-white text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             {idx + 1}

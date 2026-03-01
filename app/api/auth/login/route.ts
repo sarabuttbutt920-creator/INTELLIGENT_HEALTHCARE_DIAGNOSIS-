@@ -8,7 +8,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_medi_intel_20
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        let { email, password, role } = body;
+        const { email: rawEmail, password, role } = body;
+        let email = rawEmail;
 
         // Normalize email
         if (typeof email === "string") {

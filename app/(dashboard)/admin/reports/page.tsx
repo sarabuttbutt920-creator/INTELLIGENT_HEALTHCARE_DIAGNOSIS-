@@ -184,9 +184,12 @@ export default function ReportsOverviewPage() {
     );
 
     // Reset pagination when filters change
-    useEffect(() => {
+    const filterKey = `${searchTerm}-${severityFilter}-${statusFilter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+    if (filterKey !== prevFilterKey) {
+        setPrevFilterKey(filterKey);
         setCurrentPage(1);
-    }, [searchTerm, severityFilter, statusFilter]);
+    }
 
     // Aggregate Stats
     const totalReports = reports.length;
@@ -260,8 +263,8 @@ export default function ReportsOverviewPage() {
                         <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-medium ${isFilterOpen || severityFilter !== "ALL" || statusFilter !== "ALL"
-                                    ? "bg-primary/5 border-primary/20 text-primary"
-                                    : "bg-white border-border-light text-text-secondary hover:bg-surface"
+                                ? "bg-primary/5 border-primary/20 text-primary"
+                                : "bg-white border-border-light text-text-secondary hover:bg-surface"
                                 }`}
                         >
                             <Filter className="w-4 h-4" />
@@ -494,8 +497,8 @@ export default function ReportsOverviewPage() {
                                     key={idx}
                                     onClick={() => setCurrentPage(idx + 1)}
                                     className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${currentPage === idx + 1
-                                            ? "gradient-primary text-white shadow-sm"
-                                            : "border border-border-light bg-white text-text-secondary hover:bg-surface"
+                                        ? "gradient-primary text-white shadow-sm"
+                                        : "border border-border-light bg-white text-text-secondary hover:bg-surface"
                                         }`}
                                 >
                                     {idx + 1}
