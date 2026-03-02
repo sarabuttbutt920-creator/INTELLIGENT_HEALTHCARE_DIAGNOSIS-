@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { PrismaClient } from '@prisma/client';
 
 const prismaClientSingleton = () => {
@@ -16,6 +15,8 @@ export default prisma;
 if (process.env.NODE_ENV !== 'production') globalThis.prismaGlobal = prisma;
 
 // Patch BigInt for JSON.stringify gracefully across the Next.js runtime
-(BigInt.prototype as any).toJSON = function () {
-    return this.toString();
-};
+if (typeof BigInt !== 'undefined' && !(BigInt.prototype as any).toJSON) {
+    (BigInt.prototype as any).toJSON = function () {
+        return this.toString();
+    };
+}
