@@ -132,21 +132,29 @@ const mockConversations: Conversation[] = [
     }
 ];
 
-// Helper to format message timestamps
-const formatMessageTime = (isoString: string) => {
-    const date = parseISO(isoString);
-    if (isToday(date)) return format(date, "h:mm a");
-    if (isYesterday(date)) return "Yesterday";
-    return format(date, "MMM d");
+// --- Helper to format message timestamps ---
+const formatMessageTime = (dateInput: string | Date | number) => {
+    if (!dateInput) return '';
+    try {
+        const date = new Date(dateInput);
+        if (isToday(date)) return format(date, "h:mm a");
+        if (isYesterday(date)) return "Yesterday";
+        return format(date, "MMM d");
+    } catch (e) {
+        return '';
+    }
 };
 
 export default function PatientChatPage() {
-    const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
-    const [activeChatId, setActiveChatId] = useState<string | null>(mockConversations[0].id);
+    const [conversations, setConversations] = useState<any[]>([]);
+    const [activeChatId, setActiveChatId] = useState<string | null>(null);
+    const [messages, setMessages] = useState<any[]>([]); // current active chat messages
     const [searchQuery, setSearchQuery] = useState("");
     const [messageInput, setMessageInput] = useState("");
     const [showContextPanel, setShowContextPanel] = useState(true);
     const [isMobileView, setIsMobileView] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -158,10 +166,57 @@ export default function PatientChatPage() {
 
     const activeChat = conversations.find(c => c.id === activeChatId);
 
+    // Fetch initial threads & contacts
+    const fetchThreads = async () => {
+        try {
+            const res = await fetch('/api/chat/threads');
+            const data = await res.json();
+            if (data.success) {
+                setCurrentUserId(data.currentUserId);
+                // Map threads
+                const existingThreads = data.threads.map((t: any) => ({
+                    id: t.thread_id.toString(),
+                    doctorId: t.doctor.doctor_id.toString(),
+                    doctorName: t.doctor.user.full_name,
+                    specialty: t.doctor.specialization || "General Practice",
+                    avatar: t.doctor.user.full_name.charAt(0).toUpperCase(),
+                    isOnline: false,
+                    lastMessage: t.messages.length > 0 ? t.messages[0].message_text : "No messages yet",
+                    lastMessageTime: t.messages.length > 0 ? t.messages[0].sent_at : t.created_at,
+                    unreadCount: 0,
+                    isContact: false
+                }));
+
+                const existingDoctorIds = new Set(data.threads.map((t: any) => t.doctor_id.toString()));
+
+                const contactThreads = data.contacts
+                    .filter((c: any) => !existingDoctorIds.has(c.doctor_id.toString()))
+                    .map((c: any) => ({
+                        id: `CONTACT_${c.doctor_id}`,
+                        doctorId: c.doctor_id.toString(),
+                        doctorName: c.user.full_name,
+                        specialty: c.specialization || "General Practice",
+                        avatar: c.user.full_name.charAt(0).toUpperCase(),
+                        isOnline: false,
+                        lastMessage: "Start a conversation",
+                        lastMessageTime: new Date().toISOString(),
+                        unreadCount: 0,
+                        isContact: true
+                    }));
+
+                setConversations([...existingThreads, ...contactThreads]);
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error('Error fetching threads:', error);
+            setLoading(false);
+        }
+    };
+
     // Auto-scroll to bottom of chat
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [activeChat?.messages]);
+    }, [messages]);
 
     // Handle viewport changes for mobile responsiveness
     useEffect(() => {
@@ -183,62 +238,116 @@ export default function PatientChatPage() {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-    const handleSendMessage = (e?: React.FormEvent) => {
+    // Initial fetch
+    useEffect(() => {
+        fetchThreads();
+    }, []);
+
+    // Fetch messages for active chat
+    const fetchMessages = async (threadId: string) => {
+        if (!threadId || threadId.startsWith('CONTACT_')) return;
+        try {
+            const res = await fetch(`/api/chat/${threadId}/messages`);
+            const data = await res.json();
+            if (data.success) {
+                setMessages(data.messages);
+            }
+        } catch (e) {
+            console.error('Error fetching active messages:', e);
+        }
+    };
+
+    // Polling interval
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (activeChatId && !activeChatId.startsWith('CONTACT_')) {
+            fetchMessages(activeChatId);
+            interval = setInterval(() => {
+                fetchMessages(activeChatId);
+                // Background refresh threads to update last message list
+                fetch('/api/chat/threads').then(res => res.json()).then(data => {
+                    if (data.success) {
+                        setConversations(prev => {
+                            const newConversations = [...prev];
+                            data.threads.forEach((t: any) => {
+                                const idx = newConversations.findIndex(c => c.id === t.thread_id.toString());
+                                if (idx > -1 && t.messages.length > 0) {
+                                    newConversations[idx].lastMessage = t.messages[0].message_text;
+                                    newConversations[idx].lastMessageTime = t.messages[0].sent_at;
+                                }
+                            });
+                            return newConversations;
+                        });
+                    }
+                }).catch(() => { });
+            }, 3000);
+        } else {
+            setMessages([]);
+        }
+        return () => clearInterval(interval);
+    }, [activeChatId]);
+
+    const handleSendMessage = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!messageInput.trim() || !activeChatId) return;
 
-        const newMessage: Message = {
-            id: `MSG-${Date.now()}`,
-            senderId: "PATIENT",
-            text: messageInput.trim(),
-            timestamp: new Date().toISOString(),
-            status: "SENT"
-        };
+        const text = messageInput.trim();
+        setMessageInput(""); // Optimistic clear
 
-        setConversations(prev => prev.map(conv => {
-            if (conv.id === activeChatId) {
-                return {
-                    ...conv,
-                    lastMessage: newMessage.text,
-                    lastMessageTime: newMessage.timestamp,
-                    messages: [...conv.messages, newMessage]
-                };
-            }
-            return conv;
-        }));
+        if (activeChatId.startsWith('CONTACT_')) {
+            // Need to initiate chat
+            try {
+                const targetId = activeChatId.replace('CONTACT_', '');
+                const res = await fetch('/api/chat/initiate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const newThreadId = data.thread.thread_id.toString();
+                    // update list to change ID
+                    await fetchThreads();
+                    handleSelectChat(newThreadId);
 
-        setMessageInput("");
-
-        // Simulate Delivery & Read receipts
-        setTimeout(() => {
-            setConversations(prev => prev.map(conv => {
-                if (conv.id === activeChatId) {
-                    const updatedMsgs = [...conv.messages];
-                    updatedMsgs[updatedMsgs.length - 1].status = "DELIVERED";
-                    return { ...conv, messages: updatedMsgs };
+                    // now send msg
+                    await fetch(`/api/chat/${newThreadId}/messages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text })
+                    });
+                    await fetchMessages(newThreadId);
+                    fetchThreads();
                 }
-                return conv;
-            }));
+            } catch (err) {
+                console.error(err);
+            }
+            return;
+        }
 
-            setTimeout(() => {
-                setConversations(prev => prev.map(conv => {
-                    if (conv.id === activeChatId) {
-                        const updatedMsgs = [...conv.messages];
-                        if (updatedMsgs[updatedMsgs.length - 1].status === "DELIVERED") {
-                            updatedMsgs[updatedMsgs.length - 1].status = "READ";
-                        }
-                        return { ...conv, messages: updatedMsgs };
-                    }
-                    return conv;
-                }));
-            }, 1500);
-        }, 800);
+        // Send normal message
+        try {
+            const res = await fetch(`/api/chat/${activeChatId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Optimistic UI update or just wait for next poll
+                setMessages(prev => [...prev, data.message]);
+                setConversations(prev => prev.map(c => c.id === activeChatId ? {
+                    ...c, lastMessage: text, lastMessageTime: data.message.sent_at
+                } : c));
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }
+        } catch (err) {
+            console.error('Failed to send:', err);
+        }
     };
 
     const handleSelectChat = (id: string) => {
         setActiveChatId(id);
-        // Mark as read
-        setConversations(prev => prev.map(conv => conv.id === id ? { ...conv, unreadCount: 0 } : conv));
     };
 
     return (
@@ -384,16 +493,16 @@ export default function PatientChatPage() {
                             </div>
 
                             <AnimatePresence initial={false}>
-                                {activeChat.messages.map((msg, idx) => {
-                                    const isPatient = msg.senderId === "PATIENT";
-                                    const showTime = idx === 0 || parseISO(msg.timestamp).getTime() - parseISO(activeChat.messages[idx - 1].timestamp).getTime() > 1000 * 60 * 30; // 30 min diff
+                                {messages.map((msg: any, idx) => {
+                                    const isPatient = msg.sender_user_id.toString() === currentUserId;
+                                    const showTime = idx === 0 || new Date(msg.sent_at).getTime() - new Date(messages[idx - 1].sent_at).getTime() > 1000 * 60 * 30; // 30 min diff
 
                                     return (
-                                        <div key={msg.id} className="flex flex-col relative z-10">
+                                        <div key={msg.message_id} className="flex flex-col relative z-10">
                                             {showTime && (
                                                 <div className="flex justify-center mb-6 mt-2">
                                                     <span className="text-[10px] font-bold text-text-muted bg-white px-3 py-1 rounded-full border border-border-light shadow-sm tracking-widest uppercase">
-                                                        {format(parseISO(msg.timestamp), "MMM d, h:mm a")}
+                                                        {format(new Date(msg.sent_at), "MMM d, h:mm a")}
                                                     </span>
                                                 </div>
                                             )}
@@ -404,33 +513,18 @@ export default function PatientChatPage() {
                                                 className={`flex max-w-[85%] sm:max-w-[75%] ${isPatient ? 'self-end' : 'self-start'}`}
                                             >
                                                 <div className={`relative px-4 sm:px-5 py-3 shadow-md ${isPatient
-                                                        ? 'bg-slate-800 text-white rounded-3xl rounded-br-sm border border-slate-700'
-                                                        : 'bg-white text-text-primary rounded-3xl rounded-bl-sm border border-border-light'
+                                                    ? 'bg-slate-800 text-white rounded-3xl rounded-br-sm border border-slate-700'
+                                                    : 'bg-white text-text-primary rounded-3xl rounded-bl-sm border border-border-light'
                                                     }`}>
 
-                                                    {/* Attachments rendering */}
-                                                    {msg.attachment && (
-                                                        <div className={`flex items-center gap-3 p-3 rounded-xl mb-3 border ${isPatient ? 'bg-slate-900/50 border-slate-600' : 'bg-surface border-border-light'}`}>
-                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isPatient ? 'bg-slate-700 text-slate-300' : 'bg-white shadow-sm text-primary'}`}>
-                                                                {msg.attachment.type === 'PDF' ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
-                                                            </div>
-                                                            <div className="min-w-0 pr-2">
-                                                                <p className={`text-sm font-bold truncate ${isPatient ? 'text-white' : 'text-text-primary'}`}>{msg.attachment.name}</p>
-                                                                <p className={`text-[10px] uppercase tracking-wider ${isPatient ? 'text-slate-400' : 'text-text-muted'} mt-0.5`}>{msg.attachment.size} • {msg.attachment.type}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    <p className="text-[15px] leading-relaxed relative z-10 break-words">{msg.text}</p>
+                                                    <p className="text-[15px] leading-relaxed relative z-10 break-words">{msg.message_text}</p>
 
                                                     {/* Meta details inside bubble */}
                                                     <div className={`flex items-center justify-end gap-1.5 mt-2 ${isPatient ? 'text-slate-400' : 'text-text-muted'}`}>
-                                                        <span className="text-[10px] font-bold">{format(parseISO(msg.timestamp), "h:mm a")}</span>
+                                                        <span className="text-[10px] font-bold">{format(new Date(msg.sent_at), "h:mm a")}</span>
                                                         {isPatient && (
                                                             <span>
-                                                                {msg.status === 'SENT' && <Check className="w-3.5 h-3.5" />}
-                                                                {msg.status === 'DELIVERED' && <CheckCheck className="w-3.5 h-3.5 text-slate-300" />}
-                                                                {msg.status === 'READ' && <CheckCheck className="w-3.5 h-3.5 text-sky-400" />}
+                                                                <CheckCheck className="w-3.5 h-3.5 text-sky-400" />
                                                             </span>
                                                         )}
                                                     </div>

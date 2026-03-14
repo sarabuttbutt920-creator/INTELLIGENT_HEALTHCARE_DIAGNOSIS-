@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
     User,
@@ -24,50 +24,124 @@ import {
 } from "lucide-react";
 import { format, parseISO, differenceInYears, formatDistanceToNow } from "date-fns";
 
-// --- Mock Data ---
-const patientData = {
-    id: "PAT-8041",
-    fullName: "Michael Chen",
-    avatarInitials: "MC",
-    email: "michael.chen@email.com",
-    phone: "+1 (555) 987-6543",
-    address: "1234 Willow Lane, Suite 2B\nSan Francisco, CA 94107",
-    dob: "1982-05-14",
-    gender: "Male",
-    bloodType: "O+",
-    height: "5' 10\" (178 cm)",
-    weight: "175 lbs (79 kg)",
-    bmi: "25.1",
-    insurance: {
-        provider: "BlueCross Core Health",
-        policyNumber: "POL-982441-A",
-        groupNumber: "GRP-441-X",
-        status: "Active"
-    },
-    emergencyContact: {
-        name: "Sarah Chen",
-        relation: "Spouse",
-        phone: "+1 (555) 987-1122"
-    },
-    allergies: ["Penicillin", "Peanuts", "Latex"],
-    medications: [
-        { name: "Lisinopril", dosage: "10mg", frequency: "Once daily" },
-        { name: "Atorvastatin", dosage: "20mg", frequency: "Once daily at bedtime" }
-    ],
-    conditions: ["Hypertension", "CKD Stage 3a (Monitored)"],
-    latestVitals: {
-        bloodPressure: "128/82",
-        heartRate: "72",
-        spo2: "98",
-        temperature: "98.6",
-        lastUpdated: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString() // 2 days ago
-    }
-};
-
 export default function PatientProfilePage() {
     const [isEditing, setIsEditing] = useState(false);
+    const [profileData, setProfileData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
-    const calculatedAge = differenceInYears(new Date(), parseISO(patientData.dob));
+    const [editForm, setEditForm] = useState({
+        phone: "",
+        address: "",
+        emergencyContactName: "",
+        emergencyContactPhone: "",
+        gender: "",
+        bloodGroup: "",
+        dateOfBirth: ""
+    });
+
+    useEffect(() => {
+        fetch('/api/patient/profile')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setProfileData(data.profile);
+                    setEditForm({
+                        phone: data.profile.user.phone || "",
+                        address: data.profile.address || "",
+                        emergencyContactName: data.profile.emergency_contact_name || "",
+                        emergencyContactPhone: data.profile.emergency_contact_phone || "",
+                        gender: data.profile.gender || "MALE",
+                        bloodGroup: data.profile.blood_group || "",
+                        dateOfBirth: data.profile.date_of_birth ? data.profile.date_of_birth.substring(0, 10) : ""
+                    });
+                }
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error(err);
+                setLoading(false);
+            });
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const res = await fetch('/api/patient/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editForm)
+            });
+            const data = await res.json();
+            if (data.success) {
+                setProfileData(data.profile);
+                setIsEditing(false);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
+    if (!profileData) {
+        return <div className="text-center p-10 font-medium text-text-muted">Profile not found.</div>;
+    }
+
+    const patientData = {
+        id: `PAT-${profileData.patient_id}`,
+        fullName: profileData.user.full_name,
+        avatarInitials: profileData.user.full_name?.substring(0, 2).toUpperCase() || 'P',
+        email: profileData.user.email,
+        phone: profileData.user.phone || 'Not provided',
+        address: profileData.address || 'Not provided',
+        dob: profileData.date_of_birth ? profileData.date_of_birth.substring(0, 10) : '1990-01-01',
+        gender: profileData.gender ? profileData.gender.charAt(0) + profileData.gender.slice(1).toLowerCase() : 'Not specified',
+        bloodType: profileData.blood_group || 'Not specified',
+        height: "5' 10\" (178 cm)", // Mock for layout
+        weight: "175 lbs (79 kg)", // Mock for layout
+        bmi: "25.1", // Mock
+        insurance: {
+            provider: "BlueCross Core Health",
+            policyNumber: "POL-982441-A",
+            groupNumber: "GRP-441-X",
+            status: "Active"
+        },
+        emergencyContact: {
+            name: profileData.emergency_contact_name || "Not provided",
+            relation: "Family", // Mock relation
+            phone: profileData.emergency_contact_phone || "Not provided"
+        },
+        allergies: ["Penicillin", "Peanuts", "Latex"], // Mock list array
+        medications: [
+            { name: "Lisinopril", dosage: "10mg", frequency: "Once daily" },
+            { name: "Atorvastatin", dosage: "20mg", frequency: "Once daily at bedtime" }
+        ],
+        conditions: profileData.encounters?.[0]?.predictions?.map((p: any) => p.predicted_label) || ["Not diagnosed"],
+        latestVitals: profileData.encounters?.[0]?.labResult ? {
+            bloodPressure: `${profileData.encounters[0].labResult.blood_pressure || '-'}/82`,
+            heartRate: "72",
+            spo2: "98",
+            temperature: "98.6",
+            lastUpdated: profileData.encounters[0].encounter_date
+        } : {
+            bloodPressure: "-",
+            heartRate: "-",
+            spo2: "-",
+            temperature: "-",
+            lastUpdated: new Date().toISOString()
+        }
+    };
+
+    const calculatedAge = patientData.dob && patientData.dob !== '1990-01-01' ? differenceInYears(new Date(), parseISO(patientData.dob)) : 0;
 
     return (
         <div className="max-w-7xl mx-auto pb-10 space-y-6">
@@ -84,11 +158,15 @@ export default function PatientProfilePage() {
                         Download PDF Record
                     </button>
                     <button
-                        onClick={() => setIsEditing(!isEditing)}
-                        className="flex items-center gap-2 px-5 py-2.5 gradient-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow font-medium text-sm"
+                        onClick={() => {
+                            if (isEditing) handleSave();
+                            else setIsEditing(true);
+                        }}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-5 py-2.5 gradient-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow font-medium text-sm disabled:opacity-75"
                     >
                         <Edit3 className="w-4 h-4" />
-                        {isEditing ? "Save Changes" : "Edit Profile"}
+                        {saving ? "Saving..." : (isEditing ? "Save Changes" : "Edit Profile")}
                     </button>
                 </div>
             </div>
@@ -130,10 +208,28 @@ export default function PatientProfilePage() {
                                     {patientData.id}
                                 </span>
                             </h2>
-                            <p className="text-text-secondary font-medium mt-1 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-text-muted" /> {calculatedAge} years old</span>
-                                <span className="flex items-center gap-1.5"><User className="w-4 h-4 text-text-muted" /> {patientData.gender}</span>
-                                <span className="flex items-center gap-1.5"><Droplets className="w-4 h-4 text-rose-500" /> Type {patientData.bloodType}</span>
+                            <p className="text-text-secondary font-medium mt-1 flex flex-wrap gap-x-4 gap-y-2 text-sm items-center">
+                                {isEditing ? (
+                                    <>
+                                        <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-text-muted" /> <input type="date" value={editForm.dateOfBirth} onChange={e => setEditForm({ ...editForm, dateOfBirth: e.target.value })} className="p-1 border border-border-light rounded" /></span>
+                                        <span className="flex items-center gap-1.5"><User className="w-4 h-4 text-text-muted" />
+                                            <select value={editForm.gender} onChange={e => setEditForm({ ...editForm, gender: e.target.value })} className="p-1 border border-border-light rounded">
+                                                <option value="MALE">Male</option>
+                                                <option value="FEMALE">Female</option>
+                                                <option value="OTHER">Other</option>
+                                            </select>
+                                        </span>
+                                        <span className="flex items-center gap-1.5"><Droplets className="w-4 h-4 text-rose-500" /> Type
+                                            <input type="text" value={editForm.bloodGroup} onChange={e => setEditForm({ ...editForm, bloodGroup: e.target.value })} className="p-1 border border-border-light rounded w-16" placeholder="O+" />
+                                        </span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-text-muted" /> {calculatedAge > 0 ? calculatedAge : '-'} years old</span>
+                                        <span className="flex items-center gap-1.5"><User className="w-4 h-4 text-text-muted" /> {patientData.gender}</span>
+                                        <span className="flex items-center gap-1.5"><Droplets className="w-4 h-4 text-rose-500" /> Type {patientData.bloodType}</span>
+                                    </>
+                                )}
                             </p>
                         </div>
                     </div>
@@ -197,22 +293,20 @@ export default function PatientProfilePage() {
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5 mb-1"><Mail className="w-3.5 h-3.5" /> Email Address</label>
-                                {isEditing ?
-                                    <input type="email" defaultValue={patientData.email} className="w-full p-2 border border-border-light rounded-lg text-sm bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20" />
-                                    : <p className="text-sm font-medium text-text-primary break-all">{patientData.email}</p>
-                                }
+                                <p className="text-sm font-medium text-text-primary break-all">{patientData.email}</p>
+                                {/* Not editable typically */}
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5 mb-1"><Phone className="w-3.5 h-3.5" /> Phone Number</label>
                                 {isEditing ?
-                                    <input type="tel" defaultValue={patientData.phone} className="w-full p-2 border border-border-light rounded-lg text-sm bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20" />
+                                    <input type="tel" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="w-full p-2 border border-border-light rounded-lg text-sm bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20" />
                                     : <p className="text-sm font-medium text-text-primary">{patientData.phone}</p>
                                 }
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5 mb-1"><MapPin className="w-3.5 h-3.5" /> Residential Address</label>
                                 {isEditing ?
-                                    <textarea defaultValue={patientData.address} rows={2} className="w-full p-2 border border-border-light rounded-lg text-sm bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 line-clamp-2 resize-none" />
+                                    <textarea value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} rows={2} className="w-full p-2 border border-border-light rounded-lg text-sm bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 line-clamp-2 resize-none" />
                                     : <p className="text-sm font-medium text-text-primary whitespace-pre-wrap leading-relaxed">{patientData.address}</p>
                                 }
                             </div>
@@ -230,7 +324,10 @@ export default function PatientProfilePage() {
                         <div className="space-y-4 relative z-10">
                             <div>
                                 <label className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-1 block">Primary Contact</label>
-                                <p className="text-sm font-bold text-rose-900">{patientData.emergencyContact.name}</p>
+                                {isEditing ?
+                                    <input type="text" value={editForm.emergencyContactName} onChange={e => setEditForm(prev => ({ ...prev, emergencyContactName: e.target.value }))} className="w-full p-2 border border-rose-200 rounded-lg text-sm bg-white/80 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400/20" placeholder="Full Name" />
+                                    : <p className="text-sm font-bold text-rose-900">{patientData.emergencyContact.name}</p>
+                                }
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -239,7 +336,10 @@ export default function PatientProfilePage() {
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-1 block">Phone</label>
-                                    <p className="text-sm font-medium text-rose-800">{patientData.emergencyContact.phone}</p>
+                                    {isEditing ?
+                                        <input type="tel" value={editForm.emergencyContactPhone} onChange={e => setEditForm(prev => ({ ...prev, emergencyContactPhone: e.target.value }))} className="w-full p-2 border border-rose-200 rounded-lg text-sm bg-white/80 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400/20" placeholder="Phone Number" />
+                                        : <p className="text-sm font-medium text-rose-800">{patientData.emergencyContact.phone}</p>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -335,7 +435,7 @@ export default function PatientProfilePage() {
                                 <Activity className="w-5 h-5 text-amber-500" /> Diagnosed Conditions
                             </h3>
                             <ul className="space-y-3">
-                                {patientData.conditions.map(condition => (
+                                {patientData.conditions.map((condition: string) => (
                                     <li key={condition} className="flex items-start gap-3 bg-white p-3 rounded-xl border border-amber-200 shadow-sm">
                                         <div className="mt-0.5"><AlertCircle className="w-4 h-4 text-amber-600" /></div>
                                         <p className="font-semibold text-text-primary text-sm">{condition}</p>
@@ -350,7 +450,7 @@ export default function PatientProfilePage() {
                                 <Shield className="w-5 h-5 text-rose-500" /> Known Allergies
                             </h3>
                             <div className="flex flex-wrap gap-2">
-                                {patientData.allergies.map(allergy => (
+                                {patientData.allergies.map((allergy: string) => (
                                     <span key={allergy} className="px-3 py-1.5 bg-white border border-rose-200 text-rose-700 font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm">
                                         {allergy}
                                     </span>
@@ -369,7 +469,7 @@ export default function PatientProfilePage() {
                         </div>
 
                         <div className="space-y-3">
-                            {patientData.medications.map(med => (
+                            {patientData.medications.map((med: any) => (
                                 <div key={med.name} className="flex items-center justify-between p-4 rounded-xl border border-border-light bg-surface hover:bg-white hover:border-indigo-200 hover:shadow-sm transition-all group">
                                     <div className="flex items-center gap-4">
                                         <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">

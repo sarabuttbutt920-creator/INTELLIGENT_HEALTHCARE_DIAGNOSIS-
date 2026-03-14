@@ -22,7 +22,7 @@ import {
     MessageSquare,
     HeartPulse
 } from "lucide-react";
-import { format, formatDistanceToNow, isToday, parseISO } from "date-fns";
+import { format, formatDistanceToNow, isToday, isYesterday, parseISO } from "date-fns";
 
 // --- Mock Data ---
 interface Message {
@@ -49,109 +49,28 @@ interface ChatSession {
     messages: Message[];
 }
 
-const mockChats: ChatSession[] = [
-    {
-        id: "CHAT-8041",
-        patientId: "PAT-8041",
-        patientName: "Michael Chen",
-        avatar: "M",
-        isOnline: true,
-        unreadCount: 2,
-        primaryCondition: "CKD Stage 3a",
-        messages: [
-            {
-                id: "M1",
-                text: "Hello Dr. Jenkins, I wanted to follow up on the new dietary restrictions you mentioned.",
-                timestamp: new Date(Date.now() - 3600000).toISOString(),
-                isSelf: false,
-                status: "READ"
-            },
-            {
-                id: "M2",
-                text: "Sure, Michael. What specific concerns did you have regarding the sodium limits?",
-                timestamp: new Date(Date.now() - 3500000).toISOString(),
-                isSelf: true,
-                status: "READ"
-            },
-            {
-                id: "M3",
-                text: "I've been finding it difficult to cook without my usual seasonings. Are there salt substitutes I can use safely?",
-                timestamp: new Date(Date.now() - 300000).toISOString(),
-                isSelf: false,
-                status: "DELIVERED"
-            },
-            {
-                id: "M4",
-                text: "Also, I've attached my latest home blood pressure log for this week as requested.",
-                timestamp: new Date(Date.now() - 240000).toISOString(),
-                isSelf: false,
-                status: "DELIVERED",
-                attachment: {
-                    name: "BP_Log_March_Week1.pdf",
-                    size: "1.2 MB",
-                    type: "PDF"
-                }
-            }
-        ]
-    },
-    {
-        id: "CHAT-8042",
-        patientId: "PAT-8042",
-        patientName: "Emily Rodriguez",
-        avatar: "E",
-        isOnline: false,
-        unreadCount: 0,
-        primaryCondition: "Hypertension",
-        messages: [
-            {
-                id: "M1",
-                text: "Good morning Emily, your lab results came back. The KidneyNet AI inference showed no immediate risks.",
-                timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
-                isSelf: true,
-                status: "READ"
-            },
-            {
-                id: "M2",
-                text: "That is wonderful news! Thank you so much for the update, Dr. Jenkins.",
-                timestamp: new Date(Date.now() - 86000000 * 2).toISOString(),
-                isSelf: false,
-                status: "READ"
-            }
-        ]
-    },
-    {
-        id: "CHAT-8044",
-        patientId: "PAT-8044",
-        patientName: "Robert Taylor",
-        avatar: "R",
-        isOnline: true,
-        unreadCount: 0,
-        primaryCondition: "CKD Stage 4",
-        messages: [
-            {
-                id: "M1",
-                text: "Robert, please remember to fast for 12 hours before your blood work tomorrow.",
-                timestamp: new Date(Date.now() - 5000000).toISOString(),
-                isSelf: true,
-                status: "READ"
-            },
-            {
-                id: "M2",
-                text: "Understood. I'll be at the clinic at 8 AM sharp.",
-                timestamp: new Date(Date.now() - 4000000).toISOString(),
-                isSelf: false,
-                status: "READ"
-            }
-        ]
+// --- Helpers ---
+const formatMessageTime = (dateInput: string | Date | number) => {
+    if (!dateInput) return '';
+    try {
+        const date = new Date(dateInput);
+        if (isToday(date)) return format(date, "h:mm a");
+        if (isYesterday(date)) return "Yesterday";
+        return format(date, "MMM d, h:mm a");
+    } catch (e) {
+        return '';
     }
-];
+};
 
 export default function DoctorChatPage() {
-    const [chats, setChats] = useState<ChatSession[]>(mockChats);
-    const [activeChatId, setActiveChatId] = useState<string>(chats[0].id);
+    const [chats, setChats] = useState<any[]>([]);
+    const [activeChatId, setActiveChatId] = useState<string | null>(null);
+    const [messages, setMessages] = useState<any[]>([]); // Current active chat messages
     const [searchTerm, setSearchTerm] = useState("");
     const [messageInput, setMessageInput] = useState("");
     const [showInfoPanel, setShowInfoPanel] = useState(true);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
 
     // For mobile responsiveness
     const [isMobileView, setIsMobileView] = useState(false);
@@ -159,8 +78,50 @@ export default function DoctorChatPage() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Active Chat Object
     const activeChat = chats.find(c => c.id === activeChatId);
+
+    // Fetch lists
+    const fetchThreads = async () => {
+        try {
+            const res = await fetch('/api/chat/threads');
+            const data = await res.json();
+            if (data.success) {
+                setCurrentUserId(data.currentUserId);
+                const existingThreads = data.threads.map((t: any) => ({
+                    id: t.thread_id.toString(),
+                    patientId: t.patient.patient_id.toString(),
+                    patientName: t.patient.user.full_name,
+                    avatar: t.patient.user.full_name.charAt(0).toUpperCase(),
+                    isOnline: false,
+                    lastMessage: t.messages.length > 0 ? t.messages[0].message_text : "No messages yet",
+                    lastMessageTime: t.messages.length > 0 ? t.messages[0].sent_at : t.created_at,
+                    unreadCount: 0,
+                    primaryCondition: "Patient"
+                }));
+
+                const existingPatientIds = new Set(data.threads.map((t: any) => t.patient_id.toString()));
+                const contactThreads = data.contacts
+                    .filter((c: any) => !existingPatientIds.has(c.patient_id.toString()))
+                    .map((c: any) => ({
+                        id: `CONTACT_${c.patient_id}`,
+                        patientId: c.patient_id.toString(),
+                        patientName: c.user.full_name,
+                        avatar: c.user.full_name.charAt(0).toUpperCase(),
+                        isOnline: false,
+                        lastMessage: "Start a conversation",
+                        lastMessageTime: new Date().toISOString(),
+                        unreadCount: 0,
+                        primaryCondition: "Patient"
+                    }));
+
+                setChats([...existingThreads, ...contactThreads]);
+                setLoading(false);
+            }
+        } catch (e) {
+            console.error('Error fetching threads:', e);
+            setLoading(false);
+        }
+    };
 
     // Auto-scroll to bottom
     const scrollToBottom = () => {
@@ -169,62 +130,114 @@ export default function DoctorChatPage() {
 
     useEffect(() => {
         scrollToBottom();
-    }, [activeChat?.messages]);
+    }, [messages]);
+
+    useEffect(() => {
+        fetchThreads();
+    }, []);
+
+    // Fetch messages for active chat
+    const fetchMessages = async (threadId: string) => {
+        if (!threadId || threadId.startsWith('CONTACT_')) return;
+        try {
+            const res = await fetch(`/api/chat/${threadId}/messages`);
+            const data = await res.json();
+            if (data.success) {
+                setMessages(data.messages);
+            }
+        } catch (e) {
+            console.error('Error fetching messages:', e);
+        }
+    };
+
+    // Polling interval
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (activeChatId && !activeChatId.startsWith('CONTACT_')) {
+            fetchMessages(activeChatId);
+            interval = setInterval(() => {
+                fetchMessages(activeChatId);
+                // silent refresh threads to keep last messages up to date
+                fetch('/api/chat/threads').then(res => res.json()).then(data => {
+                    if (data.success) {
+                        setChats(prev => {
+                            const newChats = [...prev];
+                            data.threads.forEach((t: any) => {
+                                const idx = newChats.findIndex(c => c.id === t.thread_id.toString());
+                                if (idx > -1 && t.messages.length > 0) {
+                                    newChats[idx].lastMessage = t.messages[0].message_text;
+                                    newChats[idx].lastMessageTime = t.messages[0].sent_at;
+                                }
+                            });
+                            return newChats;
+                        });
+                    }
+                }).catch(() => { });
+            }, 3000);
+        } else {
+            setMessages([]);
+        }
+        return () => clearInterval(interval);
+    }, [activeChatId]);
 
     // Handle sending message
-    const handleSendMessage = (e: React.FormEvent) => {
+    const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!messageInput.trim() || !activeChat) return;
+        if (!messageInput.trim() || !activeChatId) return;
 
-        const newMessage: Message = {
-            id: `M_NEW_${Date.now()}`,
-            text: messageInput.trim(),
-            timestamp: new Date().toISOString(),
-            isSelf: true,
-            status: "SENT"
-        };
+        const text = messageInput.trim();
+        setMessageInput(""); // optimistically clear
 
-        const updatedChats = chats.map(chat => {
-            if (chat.id === activeChatId) {
-                return { ...chat, messages: [...chat.messages, newMessage] };
-            }
-            return chat;
-        });
+        if (activeChatId.startsWith('CONTACT_')) {
+            try {
+                const targetId = activeChatId.replace('CONTACT_', '');
+                const res = await fetch('/api/chat/initiate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const newThreadId = data.thread.thread_id.toString();
+                    await fetchThreads();
+                    setActiveChatId(newThreadId);
 
-        setChats(updatedChats);
-        setMessageInput("");
-
-        // Simulate delivery update
-        setTimeout(() => {
-            setChats(prev => prev.map(chat => {
-                if (chat.id === activeChatId) {
-                    const updatedMsgs = chat.messages.map(msg =>
-                        msg.id === newMessage.id ? { ...msg, status: "DELIVERED" as "DELIVERED" } : msg
-                    );
-                    return { ...chat, messages: updatedMsgs };
+                    // now send msg
+                    await fetch(`/api/chat/${newThreadId}/messages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text })
+                    });
+                    await fetchMessages(newThreadId);
+                    fetchThreads();
                 }
-                return chat;
-            }));
-        }, 1500);
+            } catch (err) {
+                console.error(err);
+            }
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/chat/${activeChatId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setMessages(prev => [...prev, data.message]);
+                setChats(prev => prev.map(c => c.id === activeChatId ? {
+                    ...c, lastMessage: text, lastMessageTime: data.message.sent_at
+                } : c));
+                scrollToBottom();
+            }
+        } catch (err) {
+            console.error('Failed to send message:', err);
+        }
     };
 
     // Filter Chat List
     const filteredChats = chats.filter(c => c.patientName.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    // Mark as read when opening
-    const [prevReadChatId, setPrevReadChatId] = useState(activeChatId);
-    if (activeChatId !== prevReadChatId || (activeChat && activeChat.unreadCount > 0)) {
-        setPrevReadChatId(activeChatId);
-        if (activeChat && activeChat.unreadCount > 0) {
-            setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, unreadCount: 0 } : c));
-        }
-    }
-
-    // Formatting Helpers
-    const formatMessageTime = (isoString: string) => {
-        const date = parseISO(isoString);
-        return isToday(date) ? format(date, "h:mm a") : format(date, "MMM d, h:mm a");
-    };
 
     return (
         <div className="max-w-[1400px] mx-auto h-[calc(100vh-8rem)] min-h-[600px] bg-white rounded-3xl border border-border-light shadow-sm overflow-hidden flex flex-col md:flex-row shadow-xl shadow-slate-200/50">
@@ -253,7 +266,6 @@ export default function DoctorChatPage() {
                         <div className="p-6 text-center text-text-muted text-sm">No conversations found.</div>
                     ) : (
                         filteredChats.map((chat) => {
-                            const lastMsg = chat.messages[chat.messages.length - 1];
                             const isActive = chat.id === activeChatId;
 
                             return (
@@ -279,16 +291,14 @@ export default function DoctorChatPage() {
                                     <div className="flex-1 min-w-0 pr-2">
                                         <div className="flex justify-between items-baseline mb-1">
                                             <h3 className={`font-bold truncate ${isActive ? 'text-primary' : 'text-text-primary'}`}>{chat.patientName}</h3>
-                                            {lastMsg && (
-                                                <span className={`text-[10px] shrink-0 font-medium ${isActive || chat.unreadCount > 0 ? 'text-primary' : 'text-text-muted'}`}>
-                                                    {formatDistanceToNow(parseISO(lastMsg.timestamp), { addSuffix: true }).replace('about', '').trim()}
-                                                </span>
-                                            )}
+                                            <span className={`text-[10px] shrink-0 font-medium ${isActive || chat.unreadCount > 0 ? 'text-primary' : 'text-text-muted'}`}>
+                                                {formatDistanceToNow(new Date(chat.lastMessageTime), { addSuffix: true }).replace('about', '').trim()}
+                                            </span>
                                         </div>
 
                                         <div className="flex justify-between items-center gap-2">
                                             <p className={`text-sm truncate ${chat.unreadCount > 0 ? 'font-semibold text-text-primary' : 'text-text-secondary'}`}>
-                                                {lastMsg ? (lastMsg.isSelf ? `You: ${lastMsg.text}` : lastMsg.text) : "No messages yet"}
+                                                {chat.lastMessage}
                                             </p>
                                             {chat.unreadCount > 0 && (
                                                 <span className="shrink-0 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
@@ -365,55 +375,36 @@ export default function DoctorChatPage() {
                                     </span>
                                 </div>
 
-                                {activeChat.messages.map((msg, index) => {
-                                    const showTime = index === 0 || parseISO(msg.timestamp).getTime() - parseISO(activeChat.messages[index - 1].timestamp).getTime() > 1800000; // 30 mins
+                                {messages.map((msg: any, index) => {
+                                    const isSelf = msg.sender_user_id.toString() === currentUserId;
+                                    const showTime = index === 0 || new Date(msg.sent_at).getTime() - new Date(messages[index - 1].sent_at).getTime() > 1800000; // 30 mins
 
                                     return (
                                         <motion.div
-                                            key={msg.id}
+                                            key={msg.message_id}
                                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                             animate={{ opacity: 1, scale: 1, y: 0 }}
                                             layout
-                                            className={`flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}
+                                            className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}
                                         >
                                             {showTime && (
                                                 <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-2 mt-4 text-center w-full block">
-                                                    {formatMessageTime(msg.timestamp)}
+                                                    {formatMessageTime(msg.sent_at)}
                                                 </span>
                                             )}
 
-                                            <div className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm text-sm relative group ${msg.isSelf ? 'bg-primary text-white rounded-tr-sm border border-primary/20' : 'bg-white text-text-primary rounded-tl-sm border border-border-light'}`}>
+                                            <div className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm text-sm relative group ${isSelf ? 'bg-primary text-white rounded-tr-sm border border-primary/20' : 'bg-white text-text-primary rounded-tl-sm border border-border-light'}`}>
 
                                                 {/* Text Body */}
-                                                <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-
-                                                {/* Attachments UI */}
-                                                {msg.attachment && (
-                                                    <div className={`mt-3 p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-colors backdrop-blur-sm ${msg.isSelf ? 'bg-white/10 border-white/20 hover:bg-white/20 text-white' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'}`}>
-                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${msg.isSelf ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-600'}`}>
-                                                            {msg.attachment.type === 'PDF' ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-sm truncate leading-tight">{msg.attachment.name}</p>
-                                                            <p className={`text-[10px] uppercase tracking-wider font-bold mt-1 ${msg.isSelf ? 'text-white/70' : 'text-slate-500'}`}>{msg.attachment.size} • {msg.attachment.type}</p>
-                                                        </div>
-                                                        <div className="shrink-0 pl-2">
-                                                            <div className={`p-1.5 rounded-full ${msg.isSelf ? 'bg-white/20' : 'bg-white border shadow-sm'}`}>
-                                                                <FileText className={`w-3.5 h-3.5 ${msg.isSelf ? 'text-white' : 'text-slate-600'}`} />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                <p className="leading-relaxed whitespace-pre-wrap">{msg.message_text}</p>
 
                                                 <div className="flex items-center gap-1.5 mt-1 opacity-60">
-                                                    <span className={`text-[9px] font-bold uppercase tracking-widest ${msg.isSelf ? 'text-white/80' : 'text-slate-400'}`}>
-                                                        {format(parseISO(msg.timestamp), "h:mm a")}
+                                                    <span className={`text-[9px] font-bold uppercase tracking-widest ${isSelf ? 'text-white/80' : 'text-slate-400'}`}>
+                                                        {format(new Date(msg.sent_at), "h:mm a")}
                                                     </span>
-                                                    {msg.isSelf && (
+                                                    {isSelf && (
                                                         <span>
-                                                            {msg.status === "SENT" && <Check className="w-3 h-3 text-white/50" />}
-                                                            {msg.status === "DELIVERED" && <CheckCheck className="w-3 h-3 text-white" />}
-                                                            {msg.status === "READ" && <CheckCheck className="w-3 h-3 text-emerald-300" />}
+                                                            <CheckCheck className="w-3 h-3 text-emerald-300" />
                                                         </span>
                                                     )}
                                                 </div>

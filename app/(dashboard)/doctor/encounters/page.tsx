@@ -38,98 +38,12 @@ interface ClinicalEncounter {
     status: EncounterStatus;
     keyBiomarkers: {
         bloodPressure: string;
-        specificGravity: string;
+        hemoglobin: string;
         serumCreatinine: string;
         bloodUrea: string;
     };
     doctorNotes?: string;
 }
-
-// --- Mock Data ---
-const mockEncounters: ClinicalEncounter[] = [
-    {
-        id: "ENC-10842",
-        patientName: "Michael Chen",
-        patientId: "PAT-8041",
-        date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        modelUsed: "KidneyNet-RF v2.1",
-        aiConfidence: 94.5,
-        aiResult: "CKD_DETECTED",
-        status: "PENDING_REVIEW",
-        keyBiomarkers: {
-            bloodPressure: "150/90",
-            specificGravity: "1.015",
-            serumCreatinine: "2.5",
-            bloodUrea: "85"
-        }
-    },
-    {
-        id: "ENC-10841",
-        patientName: "Samantha Hughes",
-        patientId: "PAT-8046",
-        date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        modelUsed: "KidneyNet-XGB v1.8",
-        aiConfidence: 88.2,
-        aiResult: "NOT_CKD",
-        status: "SIGNED_OFF",
-        keyBiomarkers: {
-            bloodPressure: "120/80",
-            specificGravity: "1.020",
-            serumCreatinine: "0.9",
-            bloodUrea: "35"
-        },
-        doctorNotes: "Patient presents normal kidney function. Suggested routine annual checkup."
-    },
-    {
-        id: "ENC-10840",
-        patientName: "Robert Taylor",
-        patientId: "PAT-8044",
-        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        modelUsed: "KidneyNet-RF v2.1",
-        aiConfidence: 97.8,
-        aiResult: "CKD_DETECTED",
-        status: "SIGNED_OFF",
-        keyBiomarkers: {
-            bloodPressure: "160/95",
-            specificGravity: "1.010",
-            serumCreatinine: "4.1",
-            bloodUrea: "110"
-        },
-        doctorNotes: "Stage 4 CKD confirmed. Initiated heavy dietary restriction protocol and referred for dialysis consultation."
-    },
-    {
-        id: "ENC-10839",
-        patientName: "Emily Rodriguez",
-        patientId: "PAT-8042",
-        date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-        modelUsed: "KidneyNet-SVM v1.5",
-        aiConfidence: 55.4,
-        aiResult: "INCONCLUSIVE",
-        status: "DRAFT",
-        keyBiomarkers: {
-            bloodPressure: "135/85",
-            specificGravity: "1.015",
-            serumCreatinine: "1.2",
-            bloodUrea: "45"
-        }
-    },
-    {
-        id: "ENC-10838",
-        patientName: "Alex Jordan",
-        patientId: "PAT-8045",
-        date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-        modelUsed: "KidneyNet-RF v2.1",
-        aiConfidence: 92.1,
-        aiResult: "NOT_CKD",
-        status: "SIGNED_OFF",
-        keyBiomarkers: {
-            bloodPressure: "115/75",
-            specificGravity: "1.025",
-            serumCreatinine: "0.8",
-            bloodUrea: "30"
-        }
-    }
-];
 
 // --- Helpers ---
 const resultStyles = {
@@ -158,11 +72,33 @@ const statusLabels = {
 
 export default function DoctorEncountersPage() {
     // --- State ---
-    const [encounters, setEncounters] = useState<ClinicalEncounter[]>(mockEncounters);
+    const [encounters, setEncounters] = useState<ClinicalEncounter[]>([]);
+    const [loading, setLoading] = useState(true);
+
     const [searchTerm, setSearchTerm] = useState("");
     const [resultFilter, setResultFilter] = useState<AIResult | "ALL">("ALL");
     const [statusFilter, setStatusFilter] = useState<EncounterStatus | "ALL">("ALL");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // --- Fetch Real Encounters ---
+    const fetchEncounters = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch("/api/doctor/encounters");
+            const data = await res.json();
+            if (data.success && data.encounters) {
+                setEncounters(data.encounters);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchEncounters();
+    }, []);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -205,11 +141,18 @@ export default function DoctorEncountersPage() {
         setCurrentPage(1);
     }
 
-    // Aggregate Stats
     const totalEncounters = encounters.length;
     const pendingReviews = encounters.filter(e => e.status === "PENDING_REVIEW").length;
-    const ckdDetectedRate = Math.round((encounters.filter(e => e.aiResult === "CKD_DETECTED").length / totalEncounters) * 100);
+    const ckdDetectedRate = totalEncounters > 0 ? Math.round((encounters.filter(e => e.aiResult === "CKD_DETECTED").length / totalEncounters) * 100) : 0;
     const draftCount = encounters.filter(e => e.status === "DRAFT").length;
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-10">
@@ -445,8 +388,8 @@ export default function DoctorEncountersPage() {
                                                 <p className="text-sm font-semibold text-text-primary font-mono">{enc.keyBiomarkers.bloodUrea} <span className="text-[10px] text-text-muted">mg/dL</span></p>
                                             </div>
                                             <div className="bg-surface p-2 rounded-lg border border-border-light">
-                                                <p className="text-[9px] uppercase tracking-widest font-bold text-text-muted mb-0.5">Specific Grav.</p>
-                                                <p className="text-sm font-semibold text-text-primary font-mono">{enc.keyBiomarkers.specificGravity}</p>
+                                                <p className="text-[9px] uppercase tracking-widest font-bold text-text-muted mb-0.5">Hemoglobin</p>
+                                                <p className="text-sm font-semibold text-text-primary font-mono">{enc.keyBiomarkers.hemoglobin} <span className="text-[10px] text-text-muted">g/dL</span></p>
                                             </div>
                                         </div>
 

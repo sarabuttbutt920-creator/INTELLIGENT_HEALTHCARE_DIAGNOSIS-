@@ -1,32 +1,33 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     FileText,
     Search,
-    Filter,
     Download,
     Eye,
     TestTube,
     BrainCircuit,
     Pill,
     Stethoscope,
-    Calendar,
     UserCircle,
-    ChevronDown,
     AlertTriangle,
     CheckCircle2,
     Share2,
-    Clock,
     Lock,
     Printer,
-    FileArchive
+    FileArchive,
+    Plus,
+    Trash2,
+    Edit3,
+    X,
+    Save
 } from "lucide-react";
-import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 // --- Types ---
-type ReportCategory = "LAB_RESULT" | "AI_INFERENCE" | "PRESCRIPTION" | "CLINICAL_NOTE";
+type ReportCategory = "LAB_RESULT" | "AI_INFERENCE" | "PRESCRIPTION" | "CLINICAL_NOTE" | "OTHER";
 
 interface MedicalReport {
     id: string;
@@ -37,99 +38,71 @@ interface MedicalReport {
     isRead: boolean;
     fileSize: string;
     summary?: string;
+    recommendations?: string;
     highlight?: {
         label: string;
         value: string;
         isAbnormal: boolean;
     };
+    deleteable?: boolean;
 }
 
-// --- Mock Data ---
-const mockReports: MedicalReport[] = [
-    {
-        id: "REP-9921",
-        title: "Comprehensive Metabolic Panel (CMP)",
-        category: "LAB_RESULT",
-        date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        doctorName: "Dr. Sarah Jenkins",
-        isRead: false,
-        fileSize: "1.2 MB",
-        summary: "Routine blood work analyzing kidney function, blood sugar, and electrolyte and fluid balance.",
-        highlight: { label: "eGFR", value: "48 mL/min", isAbnormal: true }
-    },
-    {
-        id: "REP-9920",
-        title: "KidneyNet Prediction Summary",
-        category: "AI_INFERENCE",
-        date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-        doctorName: "KidneyNet Engine (Auto)",
-        isRead: true,
-        fileSize: "450 KB",
-        summary: "Automated inference result based on recent vitals and urinalysis inputs. Flagged for review.",
-        highlight: { label: "CKD Risk", value: "Elevated", isAbnormal: true }
-    },
-    {
-        id: "REP-9919",
-        title: "Nephrology Consultation Notes",
-        category: "CLINICAL_NOTE",
-        date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-        doctorName: "Dr. Sarah Jenkins",
-        isRead: true,
-        fileSize: "850 KB",
-        summary: "Detailed notes from telehealth visit regarding dietary sodium restrictions and new prescription plan."
-    },
-    {
-        id: "REP-9918",
-        title: "Lisinopril 10mg - Prescription",
-        category: "PRESCRIPTION",
-        date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-        doctorName: "Dr. Sarah Jenkins",
-        isRead: true,
-        fileSize: "320 KB",
-        summary: "Updated prescription script for hypertension management. Valid for 6 refills."
-    },
-    {
-        id: "REP-9917",
-        title: "Urinalysis (Complete)",
-        category: "LAB_RESULT",
-        date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-        doctorName: "LabCorp Analytics",
-        isRead: true,
-        fileSize: "1.5 MB",
-        summary: "Full urinalysis test checking for protein, blood cells, and bacteria in urine.",
-        highlight: { label: "Albumin", value: "Normal", isAbnormal: false }
-    }
-];
-
 // --- Helpers ---
-const categoryStyles = {
+const categoryStyles: Record<ReportCategory, string> = {
     LAB_RESULT: "bg-blue-100 text-blue-700 border-blue-200",
     AI_INFERENCE: "bg-purple-100 text-purple-700 border-purple-200",
     PRESCRIPTION: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    CLINICAL_NOTE: "bg-amber-100 text-amber-700 border-amber-200"
+    CLINICAL_NOTE: "bg-amber-100 text-amber-700 border-amber-200",
+    OTHER: "bg-slate-100 text-slate-700 border-slate-200"
 };
 
-const categoryIcons = {
+const categoryIcons: Record<ReportCategory, any> = {
     LAB_RESULT: TestTube,
     AI_INFERENCE: BrainCircuit,
     PRESCRIPTION: Pill,
-    CLINICAL_NOTE: Stethoscope
-};
-
-const categoryLabels = {
-    LAB_RESULT: "Lab Result",
-    AI_INFERENCE: "AI Diagnostic",
-    PRESCRIPTION: "Prescription",
-    CLINICAL_NOTE: "Clinical Note"
+    CLINICAL_NOTE: Stethoscope,
+    OTHER: FileText
 };
 
 export default function PatientReportsPage() {
     // --- State ---
-    const [reports, setReports] = useState<MedicalReport[]>(mockReports);
-    const [activeReportId, setActiveReportId] = useState<string | null>(mockReports[0].id);
+    const [reports, setReports] = useState<MedicalReport[]>([]);
+    const [activeReportId, setActiveReportId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterCategory, setFilterCategory] = useState<ReportCategory | "ALL">("ALL");
-    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    // CRUD Modals
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [newReportDraft, setNewReportDraft] = useState({ summary: "", recommendations: "" });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editDraft, setEditDraft] = useState({ summary: "", recommendations: "" });
+
+    // Fetch initial data
+    const fetchReports = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/patient/reports');
+            const data = await res.json();
+            if (data.success) {
+                setReports(data.reports);
+                if (!activeReportId && data.reports.length > 0) {
+                    setActiveReportId(data.reports[0].id);
+                }
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchReports();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Derived Data
     const filteredReports = useMemo(() => {
@@ -147,10 +120,86 @@ export default function PatientReportsPage() {
     const totalReports = reports.length;
     const unreadCount = reports.filter(r => !r.isRead).length;
 
-    // Handle Mark as Read
     const handleReportClick = (id: string) => {
         setActiveReportId(id);
+        setIsEditMode(false);
         setReports(prev => prev.map(r => r.id === id ? { ...r, isRead: true } : r));
+    };
+
+    // --- CRUD API Calls ---
+    const handleAddReport = async () => {
+        if (!newReportDraft.summary.trim()) return;
+        setIsSubmitting(true);
+        try {
+            const res = await fetch('/api/patient/reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newReportDraft)
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchReports();
+                setIsAddModalOpen(false);
+                setNewReportDraft({ summary: "", recommendations: "" });
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleToggleEdit = () => {
+        if (!activeReport) return;
+        if (isEditMode) {
+            setIsEditMode(false);
+        } else {
+            setEditDraft({ summary: activeReport.summary || "", recommendations: activeReport.recommendations || "" });
+            setIsEditMode(true);
+        }
+    };
+
+    const handleSaveEdit = async () => {
+        if (!activeReport) return;
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(`/api/patient/reports/${activeReport.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editDraft)
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchReports();
+                setIsEditMode(false);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!activeReport) return;
+        const confirmDelete = window.confirm("Are you sure you want to delete this custom report?");
+        if (!confirmDelete) return;
+
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(`/api/patient/reports/${activeReport.id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success) {
+                setActiveReportId(null);
+                await fetchReports();
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -163,13 +212,13 @@ export default function PatientReportsPage() {
                     <p className="text-text-muted mt-1">Access your encrypted lab results, clinical notes, and AI inferences securely.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-border-light rounded-xl text-text-secondary hover:text-primary hover:border-primary/30 transition-colors shadow-sm font-medium text-sm">
-                        <Share2 className="w-4 h-4" />
-                        Share Records
+                    <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 px-5 py-2.5 bg-white border border-border-light text-primary rounded-xl shadow-sm hover:bg-slate-50 transition-colors font-bold text-sm">
+                        <Plus className="w-5 h-5" />
+                        Add Record
                     </button>
                     <button className="flex items-center gap-2 px-5 py-2.5 gradient-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow font-medium text-sm">
                         <FileArchive className="w-4 h-4" />
-                        Request Full EHR Archive
+                        Request Archive
                     </button>
                 </div>
             </div>
@@ -233,12 +282,20 @@ export default function PatientReportsPage() {
                             >
                                 <BrainCircuit className="w-3.5 h-3.5" /> Predictions
                             </button>
+                            <button
+                                onClick={() => setFilterCategory("OTHER")}
+                                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 ${filterCategory === "OTHER" ? "bg-slate-200 text-slate-800 border-slate-300" : "bg-white text-text-secondary border-border-light hover:bg-surface"}`}
+                            >
+                                <FileText className="w-3.5 h-3.5" /> Custom
+                            </button>
                         </div>
                     </div>
 
                     {/* Report List */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                        {filteredReports.length === 0 ? (
+                        {loading ? (
+                            <div className="flex items-center justify-center p-10"><div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" /></div>
+                        ) : filteredReports.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full p-6 text-center text-text-muted">
                                 <FileText className="w-12 h-12 mb-3 opacity-20" />
                                 <p className="text-sm font-semibold">No documents found.</p>
@@ -246,7 +303,7 @@ export default function PatientReportsPage() {
                         ) : (
                             <AnimatePresence>
                                 {filteredReports.map((report) => {
-                                    const Icon = categoryIcons[report.category];
+                                    const Icon = categoryIcons[report.category] || FileText;
                                     const isActive = activeReportId === report.id;
 
                                     return (
@@ -258,8 +315,8 @@ export default function PatientReportsPage() {
                                             key={report.id}
                                             onClick={() => handleReportClick(report.id)}
                                             className={`w-full text-left p-4 mb-2 rounded-2xl border transition-all flex flex-col gap-3 relative ${isActive
-                                                    ? "bg-primary/5 border-primary shadow-sm"
-                                                    : "bg-white border-transparent hover:border-border-light hover:bg-surface"
+                                                ? "bg-primary/5 border-primary shadow-sm"
+                                                : "bg-white border-transparent hover:border-border-light hover:bg-surface"
                                                 }`}
                                         >
                                             {!report.isRead && (
@@ -301,9 +358,16 @@ export default function PatientReportsPage() {
                                     <span className="text-[10px] font-mono text-slate-400 border border-slate-700 bg-slate-800 px-1.5 py-0.5 rounded ml-2 shrink-0">{activeReport.fileSize}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button className="p-2 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors" title="Print Document">
-                                        <Printer className="w-5 h-5" />
-                                    </button>
+                                    {activeReport.deleteable && (
+                                        <>
+                                            <button onClick={handleDelete} disabled={isSubmitting} className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-300 hover:text-rose-400 transition-colors" title="Delete Form">
+                                                <Trash2 className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={handleToggleEdit} className="p-2 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors" title={isEditMode ? "Cancel Edit" : "Edit Form"}>
+                                                {isEditMode ? <X className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
+                                            </button>
+                                        </>
+                                    )}
                                     <button className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-md transition-colors">
                                         <Download className="w-4 h-4" /> Save PDF
                                     </button>
@@ -320,7 +384,7 @@ export default function PatientReportsPage() {
 
                         {activeReport ? (
                             <motion.div
-                                key={activeReport.id}
+                                key={activeReport.id + (isEditMode ? '-edit' : '')}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 className="w-full max-w-2xl bg-white text-slate-900 shadow-2xl min-h-[800px] p-10 relative"
@@ -333,7 +397,7 @@ export default function PatientReportsPage() {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm font-bold text-slate-700">Date of Record: {format(parseISO(activeReport.date), "MMMM d, yyyy")}</p>
-                                        <p className="text-xs text-slate-500 font-mono mt-1">Document ID: {activeReport.id}</p>
+                                        <p className="text-xs text-slate-500 font-mono mt-1">Document ID: {activeReport.id.substring(0, 16)}</p>
                                     </div>
                                 </div>
 
@@ -341,56 +405,87 @@ export default function PatientReportsPage() {
                                 <div className="bg-slate-50 p-4 border border-slate-200 mb-8 rounded-lg flex justify-between">
                                     <div>
                                         <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-1">Patient Subject</p>
-                                        <p className="font-bold text-slate-800">Michael Chen</p>
-                                        <p className="text-xs font-mono text-slate-600 mt-0.5">ID: PAT-8041</p>
+                                        <p className="font-bold text-slate-800">You</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-1">Authorizing Provider</p>
                                         <p className="font-bold text-slate-800">{activeReport.doctorName}</p>
-                                        <p className="text-xs font-mono text-slate-600 mt-0.5">Role: Nephrology Dept.</p>
                                     </div>
                                 </div>
 
                                 {/* Body Content */}
-                                <h2 className="text-2xl font-bold text-slate-900 mb-4">{activeReport.title}</h2>
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">{activeReport.title} {isEditMode && " (Edit Mode)"}</h2>
                                 <div className="space-y-6">
-                                    <p className="text-slate-700 leading-relaxed text-sm">
-                                        {activeReport.summary}
-                                    </p>
-
-                                    {/* Mock Highlight Box */}
-                                    {activeReport.highlight && (
-                                        <div className={`p-5 rounded-xl border ${activeReport.highlight.isAbnormal ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                                            <div className="flex items-center gap-3">
-                                                {activeReport.highlight.isAbnormal ? (
-                                                    <AlertTriangle className="w-8 h-8 text-rose-500" />
-                                                ) : (
-                                                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                                                )}
-                                                <div>
-                                                    <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${activeReport.highlight.isAbnormal ? 'text-rose-600' : 'text-emerald-700'}`}>Clinical Flag: {activeReport.highlight.label}</p>
-                                                    <h4 className={`text-2xl font-black ${activeReport.highlight.isAbnormal ? 'text-rose-900' : 'text-emerald-900'}`}>{activeReport.highlight.value}</h4>
-                                                </div>
+                                    {isEditMode ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs font-bold uppercase text-slate-500 tracking-widest mb-1 block">Clinical Summary</label>
+                                                <textarea
+                                                    value={editDraft.summary}
+                                                    onChange={(e) => setEditDraft({ ...editDraft, summary: e.target.value })}
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-sm min-h-[150px]"
+                                                />
                                             </div>
+                                            <div>
+                                                <label className="text-xs font-bold uppercase text-slate-500 tracking-widest mb-1 block">Recommendations</label>
+                                                <textarea
+                                                    value={editDraft.recommendations}
+                                                    onChange={(e) => setEditDraft({ ...editDraft, recommendations: e.target.value })}
+                                                    placeholder="Add any specific steps or tasks here..."
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-sm min-h-[100px]"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={handleSaveEdit}
+                                                disabled={isSubmitting}
+                                                className="w-full py-3 bg-primary text-white font-bold rounded-xl flex items-center justify-center gap-2"
+                                            >
+                                                <Save className="w-5 h-5" />
+                                                {isSubmitting ? "Saving..." : "Save Changes"}
+                                            </button>
                                         </div>
-                                    )}
-
-                                    {/* Filler Line text to make it look like a document */}
-                                    <div className="pt-8 space-y-4">
-                                        {[1, 2, 3].map(i => (
-                                            <div key={i} className="space-y-2">
-                                                <div className="w-full h-3 bg-slate-100 rounded"></div>
-                                                <div className="w-5/6 h-3 bg-slate-100 rounded"></div>
-                                                <div className="w-4/6 h-3 bg-slate-100 rounded"></div>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-2 block">Clinical Summary / Details</label>
+                                                <p className="text-slate-700 leading-relaxed text-sm whitespace-pre-wrap flex-1 min-h-[50px] bg-slate-50 p-4 border border-slate-100 rounded-xl">
+                                                    {activeReport.summary}
+                                                </p>
                                             </div>
-                                        ))}
-                                    </div>
+
+                                            {activeReport.recommendations && activeReport.recommendations.trim().length > 0 && (
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-2 block">Recommendations & Next Steps</label>
+                                                    <p className="text-slate-700 leading-relaxed text-sm whitespace-pre-wrap bg-slate-50 p-4 border border-slate-100 rounded-xl">
+                                                        {activeReport.recommendations}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Mock Highlight Box */}
+                                            {activeReport.highlight && (
+                                                <div className={`p-5 rounded-xl border ${activeReport.highlight.isAbnormal ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'} mt-6`}>
+                                                    <div className="flex items-center gap-3">
+                                                        {activeReport.highlight.isAbnormal ? (
+                                                            <AlertTriangle className="w-8 h-8 text-rose-500" />
+                                                        ) : (
+                                                            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                                                        )}
+                                                        <div>
+                                                            <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${activeReport.highlight.isAbnormal ? 'text-rose-600' : 'text-emerald-700'}`}>Clinical Flag: {activeReport.highlight.label}</p>
+                                                            <h4 className={`text-2xl font-black ${activeReport.highlight.isAbnormal ? 'text-rose-900' : 'text-emerald-900'}`}>{activeReport.highlight.value}</h4>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
 
                                 </div>
 
                                 {/* Watermark */}
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-45deg] opacity-5 pointer-events-none">
-                                    <h1 className="text-8xl font-black uppercase text-slate-900">CONFIDENTIAL</h1>
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-45deg] opacity-[0.03] pointer-events-none">
+                                    <h1 className="text-8xl font-black uppercase text-slate-900">VERIFIED</h1>
                                     <h2 className="text-4xl font-bold text-center mt-2 tracking-widest">PATIENT RECORD</h2>
                                 </div>
 
@@ -407,6 +502,70 @@ export default function PatientReportsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Add Report Modal */}
+            <AnimatePresence>
+                {isAddModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-white rounded-3xl shadow-xl w-full max-w-lg p-6 relative"
+                        >
+                            <button onClick={() => setIsAddModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+                                <X className="w-6 h-6" />
+                            </button>
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                    <FileText className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-900">Add New Document</h2>
+                                    <p className="text-sm text-slate-500">Record a custom self-reported log or summary</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-sm font-bold text-slate-700 mb-1.5 block">Summary Details</label>
+                                    <textarea
+                                        value={newReportDraft.summary}
+                                        onChange={(e) => setNewReportDraft({ ...newReportDraft, summary: e.target.value })}
+                                        className="w-full p-3 rounded-xl border border-slate-200 focus:border-primary outline-none text-sm min-h-[120px]"
+                                        placeholder="Enter the lab details, readings, or a custom self-reported update..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-sm font-bold text-slate-700 mb-1.5 block">Recommendations (Optional)</label>
+                                    <textarea
+                                        value={newReportDraft.recommendations}
+                                        onChange={(e) => setNewReportDraft({ ...newReportDraft, recommendations: e.target.value })}
+                                        className="w-full p-3 rounded-xl border border-slate-200 focus:border-primary outline-none text-sm min-h-[80px]"
+                                        placeholder="Any specific tasks or instructions to follow up on?"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-8 flex gap-3">
+                                <button
+                                    onClick={() => setIsAddModalOpen(false)}
+                                    className="flex-1 px-4 py-3 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleAddReport}
+                                    disabled={isSubmitting || !newReportDraft.summary.trim()}
+                                    className="flex-1 px-4 py-3 rounded-xl bg-primary text-white font-bold disabled:opacity-50 transition-all hover:bg-indigo-600"
+                                >
+                                    {isSubmitting ? "Saving..." : "Save Record"}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
         </div>
     );

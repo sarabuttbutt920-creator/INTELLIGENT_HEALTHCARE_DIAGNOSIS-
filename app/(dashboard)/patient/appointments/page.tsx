@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Calendar as CalendarIcon,
@@ -24,90 +24,105 @@ import {
 } from "lucide-react";
 import { format, formatDistanceToNow, parseISO, isPast, isFuture, isToday } from "date-fns";
 
-// --- Types & Mock Data ---
+// --- Types ---
 type AppointmentType = "CLINIC" | "TELEHEALTH";
-type AppointmentStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+type AppointmentStatus = "REQUESTED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 
 interface PatientAppointment {
-    id: string;
+    id: string; // appointment_id
     doctorId: string;
     doctorName: string;
     specialty: string;
     date: string; // ISO string
-    durationMins: number;
-    type: AppointmentType;
+    durationMins: number; // mock
+    type: AppointmentType; // Extracted from reason hack
     status: AppointmentStatus;
     reason: string;
     locationOrLink: string;
     notes?: string;
 }
 
-const mockAppointments: PatientAppointment[] = [
-    {
-        id: "APT-8041-A",
-        doctorId: "DOC-102",
-        doctorName: "Dr. Sarah Jenkins",
-        specialty: "Nephrology Dept.",
-        date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000).toISOString(), // Tomorrow + 4 hours
-        durationMins: 30,
-        type: "TELEHEALTH",
-        status: "SCHEDULED",
-        reason: "Follow-up: CKD Stage 3a AI Inference Review",
-        locationOrLink: "https://mediintel.health/telehealth/join/APT-8041-A",
-        notes: "Please have your latest at-home blood pressure logs ready for reference."
-    },
-    {
-        id: "APT-8041-B",
-        doctorId: "DOC-105",
-        doctorName: "Dr. Marcus Vance",
-        specialty: "General Practice",
-        date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
-        durationMins: 45,
-        type: "CLINIC",
-        status: "SCHEDULED",
-        reason: "Annual Physical Examination",
-        locationOrLink: "MediIntel Main Campus, Suite 402\n100 Health Way, CA 94107"
-    },
-    {
-        id: "APT-8041-C",
-        doctorId: "DOC-102",
-        doctorName: "Dr. Sarah Jenkins",
-        specialty: "Nephrology Dept.",
-        date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
-        durationMins: 30,
-        type: "CLINIC",
-        status: "COMPLETED",
-        reason: "Initial Consultation & Lab Review",
-        locationOrLink: "MediIntel Main Campus, Suite 405\n100 Health Way, CA 94107",
-        notes: "Prescribed Lisinopril 10mg. Scheduled CMP panel for next month."
-    },
-    {
-        id: "APT-8041-D",
-        doctorId: "DOC-108",
-        doctorName: "Dr. Emily Chen",
-        specialty: "Cardiology Dept.",
-        date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(), // 45 days ago
-        durationMins: 30,
-        type: "TELEHEALTH",
-        status: "CANCELLED",
-        reason: "Routine Heart Rate Check",
-        locationOrLink: "https://mediintel.health/telehealth/join/APT-8041-D"
-    }
-];
-
 export default function PatientAppointmentsPage() {
     // --- State ---
-    const [appointments, setAppointments] = useState<PatientAppointment[]>(mockAppointments);
+    const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [cancellingId, setCancellingId] = useState<string | null>(null);
+
     const [activeTab, setActiveTab] = useState<"UPCOMING" | "PAST">("UPCOMING");
     const [searchTerm, setSearchTerm] = useState("");
+
+    // --- Fetch Real Appointments ---
+    const loadAppointments = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/patient/appointments');
+            const data = await res.json();
+            if (data.success && data.appointments) {
+                const mapped: PatientAppointment[] = data.appointments.map((row: any) => {
+                    // We embedded "TELEHEALTH: reason..." or "CLINIC: reason..."
+                    let type: AppointmentType = "CLINIC";
+                    let cleanedReason = row.reason || "General Visit";
+                    if (cleanedReason.startsWith("TELEHEALTH:")) {
+                        type = "TELEHEALTH";
+                        cleanedReason = cleanedReason.replace("TELEHEALTH:", "").trim();
+                    } else if (cleanedReason.startsWith("CLINIC:")) {
+                        type = "CLINIC";
+                        cleanedReason = cleanedReason.replace("CLINIC:", "").trim();
+                    }
+
+                    return {
+                        id: row.appointment_id,
+                        doctorId: row.doctor_id,
+                        doctorName: row.doctor?.user?.full_name || "Unknown Doctor",
+                        specialty: row.doctor?.specialization || "General Practice",
+                        date: row.scheduled_start, // ISO string
+                        durationMins: 30, // Mock duration
+                        type: type,
+                        status: row.status, // REQUESTED, CONFIRMED, COMPLETED, CANCELLED
+                        reason: cleanedReason,
+                        locationOrLink: type === 'TELEHEALTH' ? `https://mediintel.health/telehealth/join/${row.appointment_id}` : "MediIntel Clinical Center",
+                    };
+                });
+                setAppointments(mapped);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadAppointments();
+    }, []);
+
+    const handleCancel = async (id: string) => {
+        if (!confirm("Are you sure you want to cancel this appointment?")) return;
+        setCancellingId(id);
+        try {
+            const res = await fetch(`/api/patient/appointments?id=${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                // Remove or change status
+                setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'CANCELLED' } : a));
+            } else {
+                alert(data.message || "Failed to cancel");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Network error.");
+        } finally {
+            setCancellingId(null);
+        }
+    };
 
     // --- Derived Data ---
     const sortedAppointments = useMemo(() => {
         return [...appointments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [appointments]);
 
-    const upcomingAppointments = sortedAppointments.filter(app => (app.status === "SCHEDULED" && isFuture(parseISO(app.date))) || isToday(parseISO(app.date)));
-    const pastAppointments = sortedAppointments.filter(app => app.status !== "SCHEDULED" || isPast(parseISO(app.date)))
+    const upcomingAppointments = sortedAppointments.filter(app => (['REQUESTED', 'CONFIRMED'].includes(app.status) && isFuture(parseISO(app.date))) || (['REQUESTED', 'CONFIRMED'].includes(app.status) && isToday(parseISO(app.date))));
+    const pastAppointments = sortedAppointments.filter(app => ['COMPLETED', 'CANCELLED'].includes(app.status) || isPast(parseISO(app.date)))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Reverse chron for past
 
     const displayedAppointments = activeTab === "UPCOMING" ? upcomingAppointments : pastAppointments;
@@ -119,6 +134,14 @@ export default function PatientAppointmentsPage() {
     );
 
     const nextAppointment = upcomingAppointments.length > 0 ? upcomingAppointments[0] : null;
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto pb-10 space-y-6">
@@ -164,7 +187,7 @@ export default function PatientAppointmentsPage() {
 
                             <div className="mt-auto space-y-3">
                                 <p className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                                    <Clock className="w-4 h-4" /> Duration: {nextAppointment.durationMins} Mins
+                                    <Clock className="w-4 h-4" /> Duration: ~{nextAppointment.durationMins} Mins
                                 </p>
                                 <p className={`text-sm font-bold flex items-center gap-2 ${nextAppointment.type === 'TELEHEALTH' ? 'text-indigo-400' : 'text-amber-400'}`}>
                                     {nextAppointment.type === 'TELEHEALTH' ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
@@ -182,6 +205,7 @@ export default function PatientAppointmentsPage() {
                                 <div>
                                     <h3 className="text-2xl font-bold text-white tracking-tight">{nextAppointment.doctorName}</h3>
                                     <p className="text-slate-400 font-medium">{nextAppointment.specialty}</p>
+                                    <p className="text-xs font-bold uppercase mt-1 text-primary">{nextAppointment.status}</p>
                                 </div>
                             </div>
 
@@ -217,14 +241,14 @@ export default function PatientAppointmentsPage() {
                         onClick={() => setActiveTab("UPCOMING")}
                         className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'UPCOMING' ? 'bg-white text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
                     >
-                        Upcoming & Active
+                        Upcoming
                         <span className="ml-2 bg-primary/10 text-primary px-2 py-0.5 rounded-md text-xs">{upcomingAppointments.length}</span>
                     </button>
                     <button
                         onClick={() => setActiveTab("PAST")}
                         className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'PAST' ? 'bg-white text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
                     >
-                        Past Records
+                        Past / Records
                     </button>
                 </div>
 
@@ -268,8 +292,8 @@ export default function PatientAppointmentsPage() {
                                     {/* Left Status Strip */}
                                     <div className={`w-2 shrink-0 ${app.status === 'CANCELLED' ? 'bg-rose-500' :
                                         app.status === 'COMPLETED' ? 'bg-emerald-500' :
-                                            'bg-primary'
-                                        }`} />
+                                        app.status === 'CONFIRMED' ? 'bg-primary' : 'bg-amber-400'
+                                    }`} />
 
                                     <div className="p-5 sm:p-6 flex-1 flex flex-col sm:flex-row gap-6 sm:items-center">
 
@@ -289,6 +313,12 @@ export default function PatientAppointmentsPage() {
                                                 )}
                                                 {app.status === 'COMPLETED' && (
                                                     <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Completed</span>
+                                                )}
+                                                {app.status === 'REQUESTED' && (
+                                                    <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-600 rounded-md border border-amber-100 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Pending Approval</span>
+                                                )}
+                                                {app.status === 'CONFIRMED' && (
+                                                    <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Confirmed</span>
                                                 )}
                                             </div>
 
@@ -310,35 +340,24 @@ export default function PatientAppointmentsPage() {
 
                                         {/* Actions */}
                                         <div className="flex sm:flex-col gap-2 shrink-0 mt-4 sm:mt-0 justify-end">
-                                            {app.status === 'SCHEDULED' && (
+                                            {['REQUESTED', 'CONFIRMED'].includes(app.status) && (
                                                 <>
-                                                    {app.type === 'TELEHEALTH' && (
+                                                    {app.type === 'TELEHEALTH' && app.status === 'CONFIRMED' && (
                                                         <button className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2">
                                                             <Video className="w-4 h-4" /> Join Call
                                                         </button>
                                                     )}
-                                                    <button className="px-4 py-2 bg-white text-text-secondary border border-border-light hover:bg-slate-50 rounded-xl text-sm font-semibold transition-colors shadow-sm text-center">
-                                                        Manage
+                                                    <button 
+                                                        onClick={() => handleCancel(app.id)}
+                                                        disabled={cancellingId === app.id}
+                                                        className="px-4 py-2 bg-white text-rose-500 border border-rose-200 hover:bg-rose-50 rounded-xl text-sm font-semibold transition-colors shadow-sm text-center disabled:opacity-50"
+                                                    >
+                                                        {cancellingId === app.id ? "Cancelling..." : "Cancel"}
                                                     </button>
                                                 </>
                                             )}
-                                            {app.status === 'COMPLETED' && (
-                                                <button className="px-4 py-2 bg-white text-primary border border-primary/20 hover:bg-primary/5 rounded-xl text-sm font-semibold transition-colors shadow-sm flex items-center justify-center gap-2">
-                                                    <FileText className="w-4 h-4" /> View Notes
-                                                </button>
-                                            )}
-                                            <button className="px-2 py-2 text-text-muted hover:text-text-primary bg-white border border-transparent hover:border-border-light rounded-xl transition-colors sm:hidden">
-                                                <MoreVertical className="w-5 h-5" />
-                                            </button>
                                         </div>
                                     </div>
-
-                                    {/* Edit Context Menu Placeholder purely for visual on sm */}
-                                    {app.status === 'SCHEDULED' && (
-                                        <button className="absolute top-4 right-4 p-1.5 text-text-muted border border-transparent rounded-lg hover:border-border-light hover:bg-surface transition-colors hidden sm:block">
-                                            <MoreVertical className="w-5 h-5" />
-                                        </button>
-                                    )}
 
                                 </motion.div>
                             );

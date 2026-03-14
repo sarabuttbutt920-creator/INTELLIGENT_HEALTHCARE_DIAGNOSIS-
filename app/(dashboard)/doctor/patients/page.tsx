@@ -43,98 +43,6 @@ interface PatientRecord {
     primaryCondition?: string;
 }
 
-// --- Mock Data ---
-const mockPatients: PatientRecord[] = [
-    {
-        id: "PAT-8041",
-        fullName: "Michael Chen",
-        avatar: "M",
-        age: 62,
-        gender: "Male",
-        bloodType: "O+",
-        phone: "+1 (555) 987-6543",
-        email: "michael.chen@email.com",
-        lastVisit: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), // 2 weeks ago
-        nextAppointment: new Date(new Date().setHours(14, 30, 0, 0)).toISOString(), // Today 2:30 PM
-        riskStatus: "HIGH_RISK",
-        recentPredictionId: "PRED-9901",
-        primaryCondition: "CKD Stage 3a"
-    },
-    {
-        id: "PAT-8042",
-        fullName: "Emily Rodriguez",
-        avatar: "E",
-        age: 45,
-        gender: "Female",
-        bloodType: "A+",
-        phone: "+1 (555) 456-7890",
-        email: "emily.r@email.com",
-        lastVisit: new Date(Date.now() - 3 * 30 * 24 * 60 * 60 * 1000).toISOString(), // ~3 months ago
-        nextAppointment: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(), // Tomorrow
-        riskStatus: "PENDING_SCAN",
-        primaryCondition: "Hypertension / Proteinuria"
-    },
-    {
-        id: "PAT-8043",
-        fullName: "Lisa Thompson",
-        avatar: "L",
-        age: 58,
-        gender: "Female",
-        bloodType: "B-",
-        phone: "+1 (555) 789-0123",
-        email: "lisa.t@email.com",
-        lastVisit: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-        nextAppointment: null,
-        riskStatus: "MODERATE",
-        recentPredictionId: "PRED-9904",
-        primaryCondition: "Type 2 Diabetes"
-    },
-    {
-        id: "PAT-8044",
-        fullName: "Robert Taylor",
-        avatar: "R",
-        age: 71,
-        gender: "Male",
-        bloodType: "O-",
-        phone: "+1 (555) 222-3333",
-        email: "rtaylor@email.com",
-        lastVisit: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        nextAppointment: new Date(new Date().setHours(16, 0, 0, 0)).toISOString(), // Today 4:00 PM
-        riskStatus: "HIGH_RISK",
-        recentPredictionId: "PRED-9888",
-        primaryCondition: "CKD Stage 4"
-    },
-    {
-        id: "PAT-8045",
-        fullName: "Alex Jordan",
-        avatar: "A",
-        age: 34,
-        gender: "Male",
-        bloodType: "AB+",
-        phone: "+1 (555) 666-7777",
-        email: "ajordan@email.com",
-        lastVisit: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString(),
-        nextAppointment: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString(),
-        riskStatus: "HEALTHY",
-        recentPredictionId: "PRED-8765",
-        primaryCondition: "Routine Checkup"
-    },
-    {
-        id: "PAT-8046",
-        fullName: "Samantha Hughes",
-        avatar: "S",
-        age: 41,
-        gender: "Female",
-        bloodType: "A-",
-        phone: "+1 (555) 111-0000",
-        email: "sam.hughes@email.com",
-        lastVisit: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        nextAppointment: null,
-        riskStatus: "MODERATE",
-        primaryCondition: "Elevated Creatinine"
-    }
-];
-
 // --- Helpers ---
 const riskStyles = {
     HIGH_RISK: "bg-rose-100 text-rose-700 border-rose-200 shadow-sm shadow-rose-200/50",
@@ -159,10 +67,32 @@ const riskIcons = {
 
 export default function DoctorPatientsPage() {
     // --- State ---
-    const [patients, setPatients] = useState<PatientRecord[]>(mockPatients);
+    const [patients, setPatients] = useState<PatientRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
     const [searchTerm, setSearchTerm] = useState("");
     const [riskFilter, setRiskFilter] = useState<RiskLevel | "ALL">("ALL");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // --- Fetch Real Patients ---
+    const fetchPatients = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch("/api/doctor/patients");
+            const data = await res.json();
+            if (data.success && data.patients) {
+                setPatients(data.patients);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPatients();
+    }, []);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -208,12 +138,19 @@ export default function DoctorPatientsPage() {
         setCurrentPage(1);
     }
 
-    // Aggregate Stats
     const [renderTime] = useState(() => Date.now());
     const totalPatientsCount = patients.length;
     const highRiskCount = patients.filter(p => p.riskStatus === "HIGH_RISK").length;
     const pendingScansCount = patients.filter(p => p.riskStatus === "PENDING_SCAN").length;
-    const returningThisWeek = patients.filter(p => p.nextAppointment && (parseISO(p.nextAppointment).getTime() - renderTime < 7 * 24 * 60 * 60 * 1000)).length;
+    const returningThisWeek = patients.filter(p => p.nextAppointment && (new Date(p.nextAppointment).getTime() - renderTime < 7 * 24 * 60 * 60 * 1000)).length;
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-10">

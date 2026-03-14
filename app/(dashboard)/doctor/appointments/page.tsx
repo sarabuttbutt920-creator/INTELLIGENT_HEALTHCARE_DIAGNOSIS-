@@ -44,94 +44,6 @@ interface AppointmentRecord {
     createdAt: string;
 }
 
-// --- Mock Data ---
-const mockAppointments: AppointmentRecord[] = [
-    {
-        id: "APT-5001",
-        patientName: "Michael Chen",
-        patientId: "PAT-8041",
-        patientPhone: "+1 (555) 987-6543",
-        patientAvatar: "M",
-        scheduledStart: new Date(new Date().setHours(14, 30, 0, 0)).toISOString(), // Today 2:30 PM
-        durationMinutes: 45,
-        status: "CONFIRMED",
-        reason: "Follow-up on recent CKD Stage 3 blood work predictions.",
-        type: "IN_PERSON",
-        isNewPatient: false,
-        createdAt: "2024-02-20T10:00:00Z"
-    },
-    {
-        id: "APT-5002",
-        patientName: "Emily Rodriguez",
-        patientId: "PAT-8042",
-        patientPhone: "+1 (555) 456-7890",
-        patientAvatar: "E",
-        scheduledStart: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(), // Tomorrow
-        durationMinutes: 30,
-        status: "REQUESTED",
-        reason: "Initial consultation regarding mild proteinuria symptoms.",
-        type: "VIDEO_CALL",
-        isNewPatient: true,
-        createdAt: "2024-02-25T09:15:00Z"
-    },
-    {
-        id: "APT-5003",
-        patientName: "Lisa Thompson",
-        patientId: "PAT-8043",
-        patientPhone: "+1 (555) 789-0123",
-        patientAvatar: "L",
-        scheduledStart: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString(), // Yesterday
-        durationMinutes: 60,
-        status: "COMPLETED",
-        reason: "Routine dialysis evaluation.",
-        type: "IN_PERSON",
-        isNewPatient: false,
-        createdAt: "2024-02-15T14:20:00Z"
-    },
-    {
-        id: "APT-5004",
-        patientName: "Robert Taylor",
-        patientId: "PAT-8044",
-        patientPhone: "+1 (555) 222-3333",
-        patientAvatar: "R",
-        scheduledStart: new Date(new Date().setHours(16, 0, 0, 0)).toISOString(), // Today 4:00 PM
-        durationMinutes: 30,
-        status: "CONFIRMED",
-        reason: "Discuss AI prediction results indicating high urea levels.",
-        type: "VIDEO_CALL",
-        isNewPatient: false,
-        createdAt: "2024-02-22T11:45:00Z"
-    },
-    {
-        id: "APT-5005",
-        patientName: "Alex Jordan",
-        patientId: "PAT-8045",
-        patientPhone: "+1 (555) 666-7777",
-        patientAvatar: "A",
-        scheduledStart: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString(),
-        durationMinutes: 45,
-        status: "CONFIRMED",
-        reason: "Chronic hypertension monitoring.",
-        type: "IN_PERSON",
-        isNewPatient: false,
-        createdAt: "2024-02-24T16:30:00Z"
-    },
-    {
-        id: "APT-5006",
-        patientName: "Thomas Anderson",
-        patientId: "PAT-8046",
-        patientPhone: "+1 (555) 111-0000",
-        patientAvatar: "T",
-        scheduledStart: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString(),
-        durationMinutes: 30,
-        status: "REQUESTED",
-        reason: "Second opinion on recent lab tests.",
-        type: "VIDEO_CALL",
-        isNewPatient: true,
-        createdAt: "2024-02-26T08:00:00Z"
-    }
-];
-
 // --- Helpers ---
 const statusStyles = {
     REQUESTED: "bg-amber-100 text-amber-700 border-amber-200",
@@ -166,7 +78,10 @@ const isImminent = (dateString: string) => {
 
 export default function MySchedulePage() {
     // --- State ---
-    const [appointments, setAppointments] = useState<AppointmentRecord[]>(mockAppointments);
+    const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
+
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "ALL">("ALL");
     const [typeFilter, setTypeFilter] = useState<ConsultationType | "ALL">("ALL");
@@ -176,14 +91,78 @@ export default function MySchedulePage() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 6;
 
-    // --- Actions ---
-    const updateStatus = (id: string, newStatus: AppointmentStatus) => {
-        setAppointments(appointments.map(apt => {
-            if (apt.id === id) {
-                return { ...apt, status: newStatus };
+    // --- Fetch Data ---
+    const loadAppointments = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/doctor/appointments');
+            const data = await res.json();
+            if (data.success && data.appointments) {
+                const mapped: AppointmentRecord[] = data.appointments.map((row: any) => {
+                    let type: ConsultationType = "IN_PERSON";
+                    let cleanedReason = row.reason || "General Visit";
+                    if (cleanedReason.startsWith("TELEHEALTH:")) {
+                        type = "VIDEO_CALL";
+                        cleanedReason = cleanedReason.replace("TELEHEALTH:", "").trim();
+                    } else if (cleanedReason.startsWith("CLINIC:")) {
+                        type = "IN_PERSON";
+                        cleanedReason = cleanedReason.replace("CLINIC:", "").trim();
+                    }
+
+                    return {
+                        id: row.appointment_id,
+                        patientName: row.patient?.user?.full_name || "Unknown Patient",
+                        patientId: `PAT-${row.patient_id}`,
+                        patientPhone: row.patient?.user?.phone || "N/A",
+                        patientAvatar: (row.patient?.user?.full_name || "UP").substring(0, 2).toUpperCase(),
+                        scheduledStart: row.scheduled_start,
+                        durationMinutes: 30, // Default mock duration
+                        status: row.status,
+                        reason: cleanedReason,
+                        type: type,
+                        isNewPatient: false, // Mock
+                        createdAt: row.created_at
+                    };
+                });
+                setAppointments(mapped);
             }
-            return apt;
-        }));
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadAppointments();
+    }, []);
+
+    // --- Actions ---
+    const updateStatus = async (id: string, newStatus: AppointmentStatus) => {
+        setUpdatingId(id);
+        try {
+            const res = await fetch('/api/doctor/appointments', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appointment_id: id, status: newStatus })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setAppointments(appointments.map(apt => {
+                    if (apt.id === id) {
+                        return { ...apt, status: newStatus };
+                    }
+                    return apt;
+                }));
+            } else {
+                alert(data.message || "Failed to update appointment");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Network error while updating.");
+        } finally {
+            setUpdatingId(null);
+        }
     };
 
     // --- Derived Data ---
@@ -204,7 +183,6 @@ export default function MySchedulePage() {
     // Apply sorting: Upcoming first (closest to now), then past
     const sortedAppointments = useMemo(() => {
         return [...filteredAppointments].sort((a, b) => {
-            // For a doctor, it's often best to see Today's remaining appointments first, then tmrw, then past.
             return new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime();
         });
     }, [filteredAppointments]);
@@ -236,6 +214,14 @@ export default function MySchedulePage() {
 
     const nextAppointment = upcomingAppointments.length > 0 ? upcomingAppointments[0] : null;
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-10">
             {/* Header Section */}
@@ -245,7 +231,7 @@ export default function MySchedulePage() {
                     <p className="text-text-muted mt-1">Manage your daily clinical itinerary and upcoming virtual consultations.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button onClick={() => window.location.reload()} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-border-light rounded-xl text-text-secondary hover:text-primary hover:border-primary/30 transition-colors shadow-sm font-medium text-sm">
+                    <button onClick={() => loadAppointments()} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-border-light rounded-xl text-text-secondary hover:text-primary hover:border-primary/30 transition-colors shadow-sm font-medium text-sm">
                         <RefreshCcw className="w-4 h-4" />
                         Sync Calendar
                     </button>
@@ -424,13 +410,13 @@ export default function MySchedulePage() {
                     {paginatedAppointments.length === 0 ? (
                         <div className="bg-white rounded-2xl border border-border-light p-12 text-center shadow-sm">
                             <CalendarX className="w-16 h-16 mx-auto mb-4 text-text-muted opacity-20" />
-                            <p className="font-bold text-xl text-text-primary">No appointments scheduled</p>
-                            <p className="text-text-secondary mt-1">Adjust your filters or take the rest of the day off.</p>
+                            <p className="font-bold text-xl text-text-primary">No appointments match query</p>
+                            <p className="text-text-secondary mt-1">Adjust your filters or query term.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {paginatedAppointments.map((apt) => {
-                                const StatusIcon = statusIcons[apt.status];
+                                const StatusIcon = statusIcons[apt.status] || Clock;
                                 const imminent = isImminent(apt.scheduledStart);
 
                                 return (
@@ -439,7 +425,11 @@ export default function MySchedulePage() {
                                         initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
-                                        className={`bg-white rounded-2xl border ${imminent && apt.status === 'CONFIRMED' ? 'border-primary shadow-md shadow-primary/10' : 'border-border-light shadow-sm'} overflow-hidden flex flex-col transition-all hover:-translate-y-1 hover:shadow-md ${apt.status === 'CANCELLED' ? 'opacity-70 grayscale-[50%]' : ''}`}
+                                        className={`bg-white rounded-2xl border flex flex-col transition-all hover:-translate-y-1 hover:shadow-md h-full
+                                            ${updatingId === apt.id ? 'opacity-50 pointer-events-none' : ''}
+                                            ${imminent && apt.status === 'CONFIRMED' ? 'border-primary shadow-md shadow-primary/10' : 'border-border-light shadow-sm'} 
+                                            ${apt.status === 'CANCELLED' ? 'opacity-70 grayscale-[50%]' : ''}
+                                        `}
                                     >
                                         {/* Card Header (Time & Type) */}
                                         <div className={`p-4 border-b border-border-light flex justify-between items-center ${apt.status === 'COMPLETED' ? 'bg-surface/50' : ''}`}>
@@ -451,7 +441,7 @@ export default function MySchedulePage() {
                                                     <p className="font-bold text-text-primary text-base">
                                                         {format(parseISO(apt.scheduledStart), "h:mm a")}
                                                     </p>
-                                                    <p className="text-[10px] text-text-secondary uppercase tracking-widest font-semibold">
+                                                    <p className="text-[10px] text-text-secondary uppercase tracking-widest font-semibold flex items-center">
                                                         {format(parseISO(apt.scheduledStart), "MMM d")}
                                                         {getRelativeDay(apt.scheduledStart)}
                                                     </p>
@@ -477,11 +467,11 @@ export default function MySchedulePage() {
                                                 <div className="w-12 h-12 rounded-full gradient-primary text-white flex items-center justify-center font-bold text-lg shadow-sm">
                                                     {apt.patientAvatar}
                                                 </div>
-                                                <div>
-                                                    <p className="font-bold text-text-primary flex items-center gap-2">
+                                                <div className="flex-1 overflow-hidden">
+                                                    <p className="font-bold text-text-primary flex items-center gap-2 truncate">
                                                         {apt.patientName}
                                                         {apt.isNewPatient && (
-                                                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold uppercase rounded-full">New</span>
+                                                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold uppercase rounded-full shrink-0">New</span>
                                                         )}
                                                     </p>
                                                     <p className="text-xs font-mono text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border-light w-fit mt-1">{apt.patientId}</p>
@@ -498,7 +488,7 @@ export default function MySchedulePage() {
                                         <div className="p-4 bg-slate-50 border-t border-border-light mt-auto">
                                             {/* Status Badge */}
                                             <div className="flex justify-between items-center mb-4">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase shadow-sm ${statusStyles[apt.status]}`}>
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase shadow-sm ${statusStyles[apt.status] || ''}`}>
                                                     <StatusIcon className="w-3.5 h-3.5" />
                                                     {apt.status}
                                                 </span>
@@ -508,17 +498,17 @@ export default function MySchedulePage() {
                                             </div>
 
                                             {/* Action Buttons entirely dependent on Doctor context */}
-                                            <div className="flex gap-2 w-full">
+                                            <div className="flex gap-2 w-full mt-2">
                                                 {apt.status === 'REQUESTED' && (
                                                     <>
                                                         <button
-                                                            onClick={() => updateStatus(apt.id, 'CONFIRMED')}
+                                                            onClick={(e) => { e.stopPropagation(); updateStatus(apt.id, 'CONFIRMED')}}
                                                             className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors shadow-sm"
                                                         >
                                                             Approve
                                                         </button>
                                                         <button
-                                                            onClick={() => updateStatus(apt.id, 'CANCELLED')}
+                                                            onClick={(e) => { e.stopPropagation(); updateStatus(apt.id, 'CANCELLED')}}
                                                             className="flex-1 py-2 rounded-xl bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm font-semibold transition-colors shadow-sm"
                                                         >
                                                             Decline

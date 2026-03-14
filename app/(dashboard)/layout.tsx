@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -75,7 +75,33 @@ export default function DashboardLayout({
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isNotifOpen, setIsNotifOpen] = useState(false);
     const router = useRouter();
+
+    // -- Notifications State --
+    const [notifications, setNotifications] = useState<{ appointments: number, messages: number, activities: any[] }>({ appointments: 0, messages: 0, activities: [] });
+
+    useEffect(() => {
+        if (role !== 'ADMIN') {
+            const fetchNotifs = async () => {
+                try {
+                    const res = await fetch('/api/notifications');
+                    const data = await res.json();
+                    if (data.success) {
+                        setNotifications({ 
+                            appointments: data.appointments || 0, 
+                            messages: data.messages || 0,
+                            activities: data.activities || []
+                        });
+                    }
+                } catch (e) { console.error('Error fetching notifications:', e); }
+            };
+            fetchNotifs();
+            // Refresh every 30 seconds for "real-time" feel
+            const intervalId = setInterval(fetchNotifs, 30000);
+            return () => clearInterval(intervalId);
+        }
+    }, [role]);
 
     const handleLogout = async () => {
         try {
@@ -121,7 +147,20 @@ export default function DashboardLayout({
                                             }`}
                                     >
                                         <link.icon className={`w-5 h-5 shrink-0 ${isActive ? "text-primary" : "group-hover:text-primary"}`} />
-                                        {isSidebarOpen && <span className="text-sm">{link.label}</span>}
+                                        {isSidebarOpen && <span className="text-sm flex-1">{link.label}</span>}
+                                        
+                                        {/* Notification Badges inside Sidebar */}
+                                        {isSidebarOpen && link.label === "Appointments" && notifications.appointments > 0 && (
+                                            <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                                                {notifications.appointments}
+                                            </span>
+                                        )}
+                                        {isSidebarOpen && link.label === "Chat" && notifications.messages > 0 && (
+                                            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                                                {notifications.messages}
+                                            </span>
+                                        )}
+
                                         {isActive && (
                                             <motion.div
                                                 layoutId="sidebar-active"
@@ -176,10 +215,66 @@ export default function DashboardLayout({
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <button className="relative w-10 h-10 rounded-xl bg-surface flex items-center justify-center hover:bg-border-light transition-colors">
-                            <Bell className="w-5 h-5 text-text-secondary" />
-                            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-                        </button>
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                                className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isNotifOpen ? 'bg-primary/10 text-primary' : 'bg-surface text-text-secondary hover:bg-border-light'}`}
+                            >
+                                <Bell className="w-5 h-5" />
+                                {(notifications.appointments > 0 || notifications.messages > 0) && (
+                                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 border-2 border-white text-[8px] font-bold text-white shadow-sm">
+                                        {notifications.appointments + notifications.messages}
+                                    </span>
+                                )}
+                            </button>
+
+                            {/* Notification Dropdown */}
+                            <AnimatePresence>
+                                {isNotifOpen && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        className="absolute right-0 top-14 w-80 bg-white rounded-2xl border border-border-light shadow-xl overflow-hidden z-50 flex flex-col"
+                                    >
+                                        <div className="px-4 py-3 border-b border-border-light flex items-center justify-between bg-surface/50">
+                                            <h3 className="font-bold text-text-primary text-sm">Activity Notifications</h3>
+                                            <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">{notifications.activities.length} New</span>
+                                        </div>
+                                        <div className="max-h-80 overflow-y-auto p-2">
+                                            {notifications.activities.length === 0 ? (
+                                                <div className="py-8 text-center text-text-muted flex flex-col items-center justify-center">
+                                                    <Bell className="w-8 h-8 opacity-20 mb-2" />
+                                                    <p className="text-sm">You are all caught up!</p>
+                                                </div>
+                                            ) : (
+                                                notifications.activities.map((act) => (
+                                                    <div key={act.id} className="p-3 mb-1 hover:bg-surface rounded-xl cursor-pointer transition-colors border border-transparent hover:border-border-light group">
+                                                        <div className="flex gap-3">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${act.type === 'APPOINTMENT' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                                                {act.type === 'APPOINTMENT' ? <Calendar className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-bold text-text-primary group-hover:text-primary transition-colors">{act.title}</p>
+                                                                <p className="text-xs text-text-secondary leading-snug mt-0.5">{act.message}</p>
+                                                                <p className="text-[9px] text-text-muted mt-1 uppercase tracking-wider font-semibold">Just now</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                        {notifications.activities.length > 0 && (
+                                            <div className="p-2 border-t border-border-light bg-surface/50">
+                                                <button className="w-full py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg transition-colors">
+                                                    Mark All As Read
+                                                </button>
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                         <div className="h-8 w-px bg-border-light mx-2" />
                         <div className="flex items-center gap-3">
                             <div className="text-right">
@@ -230,8 +325,18 @@ export default function DashboardLayout({
                                         onClick={() => setIsMobileMenuOpen(false)}
                                         className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface hover:text-primary transition-all"
                                     >
-                                        <link.icon className="w-5 h-5" />
-                                        <span className="text-sm font-medium">{link.label}</span>
+                                        <link.icon className="w-5 h-5 shrink-0" />
+                                        <span className="text-sm font-medium flex-1">{link.label}</span>
+                                        {link.label === "Appointments" && notifications.appointments > 0 && (
+                                            <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                                                {notifications.appointments}
+                                            </span>
+                                        )}
+                                        {link.label === "Chat" && notifications.messages > 0 && (
+                                            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                                                {notifications.messages}
+                                            </span>
+                                        )}
                                     </Link>
                                 ))}
                             </nav>

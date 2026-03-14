@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Calendar as CalendarIcon,
@@ -28,29 +28,25 @@ type BookingStep = 1 | 2 | 3 | 4;
 type VisitType = "CLINIC" | "TELEHEALTH";
 
 interface Doctor {
-    id: string;
+    id: string; // Real doctor_id from DB
     name: string;
     specialty: string;
-    rating: number;
+    rating: number; // Mocked rating
     avatar: string;
-    availableTimes: string[];
+    availableTimes: string[]; // Mocked times
 }
 
-// --- Mock Data ---
+// --- Static Data ---
 const specialties = [
     { id: "sp-1", name: "Nephrology Dept.", icon: Activity, desc: "Kidney specialists & AI diagnostics" },
     { id: "sp-2", name: "Cardiology Dept.", icon: HeartPulse, desc: "Heart health & blood pressure" },
     { id: "sp-3", name: "General Practice", icon: Stethoscope, desc: "Primary care & routine exams" },
     { id: "sp-4", name: "Neurology Dept.", icon: BrainCircuit, desc: "Brain, spine & nervous system" },
     { id: "sp-5", name: "Optometry Dept.", icon: Eye, desc: "Vision & eye care checkups" },
+    { id: "sp-6", name: "Others", icon: Search, desc: "Other specialized departments" },
 ];
 
-const mockDoctors: Doctor[] = [
-    { id: "DOC-102", name: "Dr. Sarah Jenkins", specialty: "Nephrology Dept.", rating: 4.9, avatar: "SJ", availableTimes: ["09:00 AM", "10:30 AM", "01:00 PM", "03:45 PM"] },
-    { id: "DOC-105", name: "Dr. Marcus Vance", specialty: "General Practice", rating: 4.8, avatar: "MV", availableTimes: ["08:15 AM", "11:00 AM", "02:30 PM", "04:00 PM"] },
-    { id: "DOC-108", name: "Dr. Emily Chen", specialty: "Cardiology Dept.", rating: 5.0, avatar: "EC", availableTimes: ["09:30 AM", "01:15 PM", "03:00 PM"] },
-    { id: "DOC-110", name: "Dr. Robert Singh", specialty: "Nephrology Dept.", rating: 4.7, avatar: "RS", availableTimes: ["10:00 AM", "12:00 PM", "04:30 PM"] },
-];
+const mockTimes = ["09:00 AM", "10:30 AM", "01:00 PM", "03:45 PM", "05:00 PM"];
 
 // Generate consecutive dates starting from today
 const getNextDays = (numDays: number) => {
@@ -61,6 +57,8 @@ const getNextDays = (numDays: number) => {
 export default function BookAppointmentPage() {
     // --- State ---
     const [step, setStep] = useState<BookingStep>(1);
+    const [doctorsList, setDoctorsList] = useState<Doctor[]>([]);
+    const [loading, setLoading] = useState(true);
 
     // Booking Form State
     const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null);
@@ -73,8 +71,47 @@ export default function BookAppointmentPage() {
     const [isConfirming, setIsConfirming] = useState(false);
     const [isConfirmed, setIsConfirmed] = useState(false);
 
+    // --- Fetch Real Doctors ---
+    useEffect(() => {
+        fetch('/api/patient/doctors')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.doctors) {
+                    const mapped: Doctor[] = data.doctors.map((row: any) => ({
+                        id: row.doctor_id,
+                        name: row.user?.full_name || "Unknown Doctor",
+                        specialty: row.specialization || "General Practice",
+                        rating: 4.8 + (Math.random() * 0.2), // Random 4.8 - 5.0
+                        avatar: (row.user?.full_name || "UD").substring(0, 2).toUpperCase(),
+                        availableTimes: mockTimes.sort(() => 0.5 - Math.random()).slice(0, 3)
+                    }));
+                    setDoctorsList(mapped);
+                }
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error("Error fetching docs", err);
+                setLoading(false);
+            });
+    }, []);
+
     // --- Derived Data ---
-    const availableDoctors = mockDoctors.filter(d => d.specialty === selectedSpecialty);
+    // Try to exact match specialty first, otherwise clump them into "Others"
+    const knownSpecialtyNames = specialties.map(s => s.name.toLowerCase());
+    
+    let availableDoctors = doctorsList.filter(d => {
+        if (!selectedSpecialty) return false;
+        if (selectedSpecialty === "Others") {
+            return !knownSpecialtyNames.includes(d.specialty.toLowerCase());
+        }
+        return d.specialty.toLowerCase().includes(selectedSpecialty.toLowerCase());
+    });
+    
+    // If exact match fails, just show all for demo if "Others" is selected
+    if (selectedSpecialty === "Others" && availableDoctors.length === 0) {
+        availableDoctors = doctorsList;
+    }
+
     const upcomingDates = getNextDays(14); // Next 14 days
 
     // --- Handlers ---
@@ -98,13 +135,39 @@ export default function BookAppointmentPage() {
         handleNext();
     };
 
-    const handleConfirmBooking = () => {
+    const handleConfirmBooking = async () => {
+        if (!selectedDoctor || !selectedDate || !selectedTime) return;
+        
         setIsConfirming(true);
-        // Simulate API delay
-        setTimeout(() => {
+        
+        // Parse "hh:mm AM" and merge with Date
+        const dateStr = format(selectedDate, "yyyy-MM-dd");
+        // Convert time string to proper Date object
+        const finalDate = new Date(`${dateStr} ${selectedTime}`);
+
+        try {
+            const res = await fetch('/api/patient/appointments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    doctor_id: selectedDoctor.id,
+                    scheduled_start: finalDate.toISOString(),
+                    reason: `${visitType}: ${reason || 'General Consultation'}`
+                })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                setIsConfirmed(true);
+            } else {
+                alert("Booking failed: " + data.message);
+            }
+        } catch(err) {
+            console.error("Booking error:", err);
+            alert("Network error while booking appointment.");
+        } finally {
             setIsConfirming(false);
-            setIsConfirmed(true);
-        }, 2000);
+        }
     };
 
     // --- Animations ---
@@ -113,6 +176,14 @@ export default function BookAppointmentPage() {
         animate: { opacity: 1, x: 0 },
         exit: { opacity: 0, x: -20 }
     };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     if (isConfirmed) {
         return (
@@ -286,7 +357,7 @@ export default function BookAppointmentPage() {
                                                 </div>
                                                 <div>
                                                     <h3 className="font-bold text-lg text-text-primary flex items-center gap-2">
-                                                        {doctor.name} <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded font-black flex items-center gap-1">★ {doctor.rating}</span>
+                                                        {doctor.name} <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded font-black flex items-center gap-1">★ {doctor.rating.toFixed(1)}</span>
                                                     </h3>
                                                     <p className="text-sm font-medium text-text-secondary line-clamp-1">{doctor.specialty}</p>
                                                 </div>
@@ -387,8 +458,6 @@ export default function BookAppointmentPage() {
                             <div className="flex-1 space-y-6">
                                 {/* Summary Card */}
                                 <div className="bg-indigo-50/50 border border-indigo-100 rounded-3xl p-6 shadow-sm">
-                                    <h3 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><ClipBoardIcon className="w-5 h-5 text-indigo-500" /> Booking Summary</h3>
-
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-white rounded-2xl p-5 border border-indigo-100">
                                         <div>
                                             <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Subject Provider</p>

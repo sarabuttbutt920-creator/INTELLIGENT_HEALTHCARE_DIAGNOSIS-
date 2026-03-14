@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
     Activity,
@@ -14,46 +15,71 @@ import {
     Download
 } from "lucide-react";
 import Image from "next/image";
-
-/* Mock Data */
-const healthMetrics = [
-    { label: "Albumin", value: "Level 1", status: "Normal", color: "blue", icon: Droplets },
-    { label: "Blood Pressure", value: "120/80", status: "Ideal", color: "emerald", icon: Activity },
-    { label: "Hemoglobin", value: "14.2 g/dL", status: "Normal", color: "purple", icon: Zap },
-    { label: "Risk Factor", value: "8.4%", status: "Low Risk", color: "sky", icon: Heart },
-];
-
-const testHistory = [
-    {
-        id: "LAB-882",
-        title: "Full Kidney Panel",
-        date: "Feb 18, 2026",
-        status: "Normal",
-        risk: "Low"
-    },
-    {
-        id: "LAB-841",
-        title: "Serum Creatinine Test",
-        date: "Jan 24, 2026",
-        status: "Warning",
-        risk: "Moderate"
-    },
-    {
-        id: "LAB-792",
-        title: "Glomerular Filtration Rate",
-        date: "Dec 12, 2025",
-        status: "Normal",
-        risk: "Low"
-    },
-];
+import Link from "next/link";
+import { format } from "date-fns";
 
 export default function PatientOverview() {
+    const [profile, setProfile] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetch('/api/patient/profile')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setProfile(data.profile);
+                }
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error("Dashboard fetch err:", err);
+                setLoading(false);
+            });
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
+    const latestEncounter = profile?.encounters?.[0];
+    const latestLab = latestEncounter?.labResult;
+    const latestPred = latestEncounter?.predictions?.[0];
+
+    const healthMetrics = [
+        { label: "Albumin", value: latestLab?.albumin ?? "N/A", status: "Level", color: "blue", icon: Droplets },
+        { label: "Blood Pressure", value: latestLab?.blood_pressure ? `${latestLab.blood_pressure}/82` : "120/80 (Avg)", status: "Ideal", color: "emerald", icon: Activity },
+        { label: "Hemoglobin", value: latestLab?.hemoglobin ? `${latestLab.hemoglobin} g/dL` : "N/A", status: "Normal", color: "purple", icon: Zap },
+        { label: "Risk Factor", value: latestPred ? `${(latestPred.risk_score * 100).toFixed(1)}%` : "N/A", status: latestPred?.predicted_label === 'CKD' ? "High Risk" : "Low Risk", color: "sky", icon: Heart },
+    ];
+
+    const dynamicTestHistory = (profile?.encounters || []).map((enc: any) => {
+        const p = enc.predictions?.[0];
+        return {
+            id: `ENC-${enc.encounter_id}`,
+            title: p ? (p.predicted_label === 'CKD' ? "CKD AI Assessment" : "Negative AI Initial Check") : "General Lab Result",
+            date: format(new Date(enc.encounter_date), "MMM dd, yyyy"),
+            status: p?.predicted_label === 'CKD' ? "Warning" : "Normal",
+            risk: p?.predicted_label === 'CKD' ? "High" : "Low"
+        };
+    }).slice(0, 3); // top 3 for dashboard
+
+    // If no dynamic history, provide empty fallback rather than hardcoded fake data, so it feels real.
+    const displayHistory = dynamicTestHistory.length > 0 ? dynamicTestHistory : [];
+
+    // Health Score calculation (just visual logic based on risk score)
+    const baseScore = 96;
+    const healthScore = latestPred ? Math.max(10, Math.round(100 - (latestPred.risk_score * 100))) : baseScore;
+
     return (
         <div className="space-y-8">
             {/* Welcome Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-text-primary">Hello, Welcome Back 👋</h1>
+                    <h1 className="text-2xl font-bold text-text-primary">Hello, {profile?.user?.full_name?.split(' ')[0] || "Welcome Back"} 👋</h1>
                     <p className="text-text-secondary text-sm">Here is your kidney health summary for today.</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -61,9 +87,11 @@ export default function PatientOverview() {
                         <Calendar className="w-4 h-4 text-primary" />
                         Schedule Visit
                     </button>
-                    <button className="px-5 py-2.5 rounded-xl gradient-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all">
-                        New Analysis
-                    </button>
+                    <Link href="/patient/prediction">
+                        <button className="px-5 py-2.5 rounded-xl gradient-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all cursor-pointer">
+                            New Analysis
+                        </button>
+                    </Link>
                 </div>
             </div>
 
@@ -83,11 +111,13 @@ export default function PatientOverview() {
                             Early Detection Score
                         </span>
                         <div className="mt-6 flex items-end gap-4">
-                            <h2 className="text-6xl font-bold">92<span className="text-2xl text-slate-400 font-medium">/100</span></h2>
-                            <div className="mb-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
-                                <ArrowRight className="w-3 h-3 -rotate-45" />
-                                +2.4% from last month
-                            </div>
+                            <h2 className="text-6xl font-bold">{healthScore}<span className="text-2xl text-slate-400 font-medium">/100</span></h2>
+                            {latestPred && (
+                                <div className={`mb-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${latestPred.predicted_label === 'NOT_CKD' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+                                    {latestPred.predicted_label === 'NOT_CKD' ? <ArrowRight className="w-3 h-3 -rotate-45" /> : <ArrowRight className="w-3 h-3 rotate-45" />}
+                                    Current AI Assessment
+                                </div>
+                            )}
                         </div>
                         <p className="mt-4 text-slate-300 max-w-sm leading-relaxed text-sm">
                             Your kidney health score is excellent. Keep following your current diet and hydration plan to maintain this status.
@@ -170,29 +200,34 @@ export default function PatientOverview() {
                         <button className="text-primary text-sm font-semibold hover:underline">See full history</button>
                     </div>
                     <div className="p-2">
-                        {testHistory.map((test, i) => (
-                            <div key={test.id} className="flex items-center justify-between p-4 rounded-2xl hover:bg-surface transition-colors cursor-pointer group">
-                                <div className="flex items-center gap-4">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${test.status === "Normal" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                                        }`}>
-                                        <FileText className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-bold text-text-primary">{test.title}</h4>
-                                        <p className="text-xs text-text-muted font-medium">{test.date} • ID: {test.id}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-6">
-                                    <div className="text-right hidden sm:block">
-                                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-0.5">Risk Level</p>
-                                        <p className={`text-xs font-bold ${test.risk === "Low" ? "text-emerald-500" : "text-amber-500"}`}>{test.risk}</p>
-                                    </div>
-                                    <button className="p-2 rounded-lg bg-surface text-text-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                                        <Download className="w-4 h-4" />
-                                    </button>
-                                </div>
+                        {displayHistory.length === 0 ? (
+                            <div className="p-8 text-center text-text-muted font-medium">
+                                No recent test history found.
                             </div>
-                        ))}
+                        ) : (
+                            displayHistory.map((test: any) => (
+                                <div key={test.id} className="flex items-center justify-between p-4 rounded-2xl hover:bg-surface transition-colors cursor-pointer group">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${test.status === "Normal" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                                            }`}>
+                                            <FileText className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-bold text-text-primary">{test.title}</h4>
+                                            <p className="text-xs text-text-muted font-medium">{test.date} • ID: {test.id}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-6">
+                                        <div className="text-right hidden sm:block">
+                                            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-0.5">Risk Level</p>
+                                            <p className={`text-xs font-bold ${test.risk === "Low" ? "text-emerald-500" : "text-amber-500"}`}>{test.risk}</p>
+                                        </div>
+                                        <button className="p-2 rounded-lg bg-surface text-text-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                            <Download className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )))}
                     </div>
                 </div>
 
