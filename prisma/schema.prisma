@@ -222,6 +222,7 @@ model Prediction {
   predicted_label PredictedLabel
   risk_score      Decimal? @db.Decimal(5, 4)
   explanation_json Json?
+  feedback        Boolean? // Add feedback for model retraining
   created_at      DateTime @default(now())
 
   encounter PatientEncounter @relation(fields: [encounter_id], references: [encounter_id])

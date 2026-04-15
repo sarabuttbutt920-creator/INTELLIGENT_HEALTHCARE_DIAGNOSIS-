@@ -23,10 +23,11 @@ const parseD = (v: string | number | undefined | null): number | null => {
 function buildModelPayload(body: Record<string, string>) {
 
     // ── Legacy 8 core features (v1 compatibility) ───────────────────────────────
-    const sg   = parseD(body.specific_gravity) ?? 1.020;
+    const parsedSg = parseD(body.specific_gravity) ?? 1.020;
+    const sg = parsedSg.toFixed(3); // ARFF expects string with 3 decimals e.g '1.020'
     const hemo = parseD(body.hemoglobin) ?? 12.526;
-    const htn  = body.hypertension === '1' ? 1 : 0;
-    const dm   = body.diabetes === '1' ? 1 : 0;
+    const htn  = body.hypertension === '1' ? 'yes' : 'no';
+    const dm   = body.diabetes === '1' ? 'yes' : 'no';
 
     // Albumin scale 0-5 derived from urine albumin mg/L
     const urineAlbumin = parseD(body.urine_albumin) ?? -1;
@@ -37,17 +38,17 @@ function buildModelPayload(body: Record<string, string>) {
     else if (urineAlbumin >= 100) al = 2;
     else if (urineAlbumin >=  30) al = 1;
 
-    const appet = 1; // appetite — good by default (not in form)
+    const appet = 'good'; // appetite — good by default (not in form)
 
     // RBC count estimated from hematocrit (RBC ≈ Hct / 9)
     const hematocrit = parseD(body.hematocrit);
-    const rc = hematocrit && hematocrit > 0
+    const rbcc = hematocrit && hematocrit > 0
         ? Math.round((hematocrit / 9.0) * 100) / 100
         : 4.714;
 
     // Pus cells: urine WBC ≥ 5 = abnormal
     const urineWbc = parseD(body.urine_wbc) ?? 0;
-    const pc = urineWbc >= 5 ? 1 : 0;
+    const pc = urineWbc >= 5 ? 'abnormal' : 'normal';
 
     // ── Extended v2 features (24-feature model) ──────────────────────────────────
     const age  = parseD(body.age)          ?? 51.5;
@@ -59,27 +60,27 @@ function buildModelPayload(body: Record<string, string>) {
 
     // RBC abnormality from urine_rbc
     const urineRbc   = parseD(body.urine_rbc) ?? 0;
-    const rbc        = urineRbc > 5 ? 1 : 0;
+    const rbc        = urineRbc > 5 ? 'abnormal' : 'normal';
 
     // Pus cell clumps / bacteria: default absent
-    const pcc   = 0;
-    const ba    = 0;
+    const pcc   = 'notpresent';
+    const ba    = 'notpresent';
 
     const bu    = parseD(body.blood_urea_nitrogen) ?? 57.4;
     const sc    = parseD(body.serum_creatinine)    ?? 3.1;
     const sod   = parseD(body.sodium)              ?? 137.5;
     const pot   = parseD(body.potassium)           ?? 4.6;
     const pcv   = parseD(body.hematocrit)          ?? 38.9;   // packed cell vol = hematocrit
-    const wc    = parseD(body.wbc_count)           ?? 8406.0;
-    const cad   = body.cardiovascular_disease === '1' ? 1 : 0;
-    const pe    = 0;   // pedal edema — not in form, default absent
-    const ane   = 0;   // anemia — derive from hemoglobin instead of hard-code
+    const wbcc  = parseD(body.wbc_count)           ?? 8406.0;
+    const cad   = body.cardiovascular_disease === '1' ? 'yes' : 'no';
+    const pe    = 'no';   // pedal edema — not in form, default absent
+    const ane   = 'no';   // anemia — derive from hemoglobin instead of hard-code
 
     return {
-        // 8 legacy features
-        sg, htn, hemo, dm, al, appet, rc, pc,
-        // 16 extended v2 features
-        age, bp, su, rbc, pcc, ba, bgr, bu, sc, sod, pot, pcv, wc, cad, pe, ane,
+        // 8 legacy features mapped appropriately
+        sg, htn, hemo, dm, al, appet, rbcc, pc,
+        // 16 extended v2 features mapped appropriately
+        age, bp, su, rbc, pcc, ba, bgr, bu, sc, sod, pot, pcv, wbcc, cad, pe, ane,
     };
 }
 
@@ -148,7 +149,7 @@ export async function POST(req: Request) {
         const confidence: number = flaskData.confidence;
 
         // ── Persist encounter + lab result + prediction to DB ──────────────────
-        await prisma.patientEncounter.create({
+        const encounter = await prisma.patientEncounter.create({
             data: {
                 patient_id: user.patient.patient_id,
                 entered_by_user_id: user.user_id,
@@ -184,7 +185,10 @@ export async function POST(req: Request) {
                     }],
                 },
             },
+            include: { predictions: true } // Include predictions to retrieve the generated prediction ID
         });
+
+        const predictionId = encounter.predictions[0]?.prediction_id.toString();
 
         // ── Update patient gender if missing ───────────────────────────────────
         if (body.gender && !user.patient.gender) {
@@ -204,6 +208,7 @@ export async function POST(req: Request) {
             riskScore,                            // 0-100 integer
             confidence: Math.round(confidence * 100), // 0-100 integer
             result: flaskData.result,         // "CKD" | "NOT_CKD"
+            prediction_id: predictionId       // Inject id into frontend response for feedback collection
         });
 
     } catch (error) {

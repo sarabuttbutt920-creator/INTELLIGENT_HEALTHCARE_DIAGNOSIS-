@@ -32,6 +32,16 @@ export async function GET() {
                         labResult: true,
                         predictions: true
                     }
+                },
+                appointments: {
+                    where: { scheduled_start: { gte: new Date() }, status: { in: ['REQUESTED', 'CONFIRMED'] } },
+                    orderBy: { scheduled_start: 'asc' },
+                    take: 1,
+                    include: {
+                        doctor: {
+                            include: { user: true }
+                        }
+                    }
                 }
             }
         });

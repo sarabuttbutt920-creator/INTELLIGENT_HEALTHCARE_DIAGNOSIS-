@@ -544,6 +544,8 @@ export default function PatientPredictionPage() {
     const [predictionResult, setPredictionResult] = useState<null | "Positive" | "Negative">(null);
     const [riskScore, setRiskScore] = useState(0);
     const [confidence, setConfidence] = useState(0);
+    const [predictionId, setPredictionId] = useState<string | null>(null);
+    const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [predictionError, setPredictionError] = useState<string | null>(null);
 
     // Initial load for demographics
@@ -647,6 +649,8 @@ export default function PatientPredictionPage() {
                 setPredictionResult(data.isPositive ? "Positive" : "Negative");
                 setRiskScore(data.riskScore);       // real risk score 0-100
                 setConfidence(data.confidence);     // real model confidence 0-100
+                setPredictionId(data.prediction_id || null);
+                setFeedbackSubmitted(false);
             } else {
                 // Surface the real error — no fake random fallback
                 setPredictionError(
@@ -743,10 +747,26 @@ export default function PatientPredictionPage() {
         setPredictionError(null);
         setRiskScore(0);
         setConfidence(0);
+        setPredictionId(null);
+        setFeedbackSubmitted(false);
         setUploadedFiles([]);
         setReportAnalyses([]);
         fileObjectsRef.current.clear();
         setStep(1);
+    };
+
+    const submitFeedback = async (isCorrect: boolean) => {
+        if (!predictionId) return;
+        try {
+            await fetch('/api/patient/prediction/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prediction_id: predictionId, is_correct: isCorrect })
+            });
+            setFeedbackSubmitted(true);
+        } catch (e) {
+            console.error('Feedback error', e);
+        }
     };
 
     const stepVariants = {
@@ -1466,6 +1486,11 @@ export default function PatientPredictionPage() {
                                                 {confidence > 0 && (
                                                     <p className="text-white/70 text-xs font-semibold mt-1">Confidence: {confidence}%</p>
                                                 )}
+                                                {predictionResult === "Positive" && (
+                                                    <p className="text-white/90 text-sm font-black mt-2 bg-black/20 px-3 py-1 rounded-full border border-white/20">
+                                                        {riskScore >= 90 ? "Stage 4/5 CKD Risk" : riskScore >= 70 ? "Stage 3 CKD Risk" : "Stage 1/2 CKD Risk"}
+                                                    </p>
+                                                )}
                                             </div>
                                         </motion.div>
 
@@ -1596,6 +1621,53 @@ export default function PatientPredictionPage() {
                                                     </div>
                                                 </div>
 
+                                                {/* Recommendations UI */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl p-4">
+                                                        <h4 className="text-xs font-black text-indigo-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                            <Stethoscope className="w-4 h-4 text-indigo-500" />
+                                                            Doctor & Medical Protocol
+                                                        </h4>
+                                                        <ul className="text-xs text-indigo-700/80 space-y-2 leading-relaxed">
+                                                            {predictionResult === "Positive" ? (
+                                                                <>
+                                                                    <li><strong className="text-indigo-900">1. Urgent Consult:</strong> Book an immediate session with a certified Nephrologist.</li>
+                                                                    <li><strong className="text-indigo-900">2. Confirmatory Tests:</strong> Repeat Serum Creatinine and eGFR to solidify baseline within 7 days.</li>
+                                                                    <li><strong className="text-indigo-900">3. Complications Check:</strong> Manage associated conditions like BP and glucose rigidly. Ask doctor about ACE inhibitors appropriately.</li>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <li><strong className="text-indigo-900">1. Annual Monitoring:</strong> Perform routine yearly kidney profile panels.</li>
+                                                                    <li><strong className="text-indigo-900">2. General Checkup:</strong> No urgent consultation required. Review at your next standard evaluation.</li>
+                                                                    <li><strong className="text-indigo-900">3. Medications:</strong> Use careful evaluation over OTC pain meds (NSAIDs) long-term.</li>
+                                                                </>
+                                                            )}
+                                                        </ul>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-4">
+                                                        <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                            <Activity className="w-4 h-4 text-emerald-500" />
+                                                            Home & Lifestyle Recommendations
+                                                        </h4>
+                                                        <ul className="text-xs text-emerald-700/80 space-y-2 leading-relaxed">
+                                                            {predictionResult === "Positive" ? (
+                                                                <>
+                                                                    <li><strong className="text-emerald-900">1. Diet Adjustments:</strong> Transition rapidly to a Low-Sodium, Low-Potassium diet.</li>
+                                                                    <li><strong className="text-emerald-900">2. Fluid Balance:</strong> Consult your physician; restricted hydration protocols might apply in later stages.</li>
+                                                                    <li><strong className="text-emerald-900">3. Harm Avoidance:</strong> Strictly avoid unverified herbal remedies which act as nephrotoxins.</li>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <li><strong className="text-emerald-900">1. Healthy Lifestyle:</strong> 150 mins cardio exercise weekly.</li>
+                                                                    <li><strong className="text-emerald-900">2. Optimal Hydration:</strong> Drink 2.5 - 3 Liters of clear water per day steadily.</li>
+                                                                    <li><strong className="text-emerald-900">3. Dietary Balance:</strong> Consume a robust whole foods approach, minimizing highly processed sodium bombs.</li>
+                                                                </>
+                                                            )}
+                                                        </ul>
+                                                    </div>
+                                                </div>
+
                                                 {/* Disclaimer */}
                                                 <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
                                                     <Info className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
@@ -1621,15 +1693,55 @@ export default function PatientPredictionPage() {
                                             >
                                                 Run New Test
                                             </button>
-                                            <button
-                                                onClick={() => downloadPDFReport(formData, predictionResult, riskScore, confidence)}
-                                                className="flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 text-white font-black shadow-xl shadow-slate-900/30 hover:shadow-slate-900/50 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                                            >
-                                                <Download className="w-5 h-5" />
-                                                Download PDF Report
-                                            </button>
-                                        </motion.div>
-                                    </div>
+                                                <button
+                                                    onClick={() => downloadPDFReport(formData, predictionResult, riskScore, confidence)}
+                                                    className="flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 text-white font-black shadow-xl shadow-slate-900/30 hover:shadow-slate-900/50 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                                >
+                                                    <Download className="w-5 h-5" />
+                                                    Download PDF Report
+                                                </button>
+                                            </motion.div>
+
+                                            {/* ══ FEEDBACK UI ══ */}
+                                            {predictionId && (
+                                                <motion.div 
+                                                    initial={{ opacity: 0, y: 15 }} 
+                                                    animate={{ opacity: 1, y: 0 }} 
+                                                    transition={{ delay: 0.7 }}
+                                                    className="w-full max-w-lg mt-8 bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center mx-auto shadow-sm"
+                                                >
+                                                    {feedbackSubmitted ? (
+                                                        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
+                                                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mb-2">
+                                                                <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                                                            </div>
+                                                            <h4 className="font-bold text-text-primary">Thank you for your feedback!</h4>
+                                                            <p className="text-xs text-text-muted mt-1">This actively helps improve our continuous learning MLOps AI model pipeline.</p>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <h4 className="font-black text-text-primary tracking-tight mb-1">Help Improve MediIntel AI</h4>
+                                                            <p className="text-xs text-text-muted mb-4">Did the doctor confirm this diagnosis as accurate for this patient?</p>
+                                                            <div className="flex justify-center gap-3">
+                                                                <button 
+                                                                    onClick={() => submitFeedback(true)}
+                                                                    className="flex-1 py-2.5 rounded-xl border-2 border-emerald-500 text-emerald-600 font-bold hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                                                                >
+                                                                    Yes, Correct
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => submitFeedback(false)}
+                                                                    className="flex-1 py-2.5 rounded-xl border-2 border-rose-500 text-rose-600 font-bold hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                                                                >
+                                                                    No, Incorrect
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </motion.div>
+                                            )}
+
+                                        </div>
                                 ) : null}
                             </motion.div>
                         )}

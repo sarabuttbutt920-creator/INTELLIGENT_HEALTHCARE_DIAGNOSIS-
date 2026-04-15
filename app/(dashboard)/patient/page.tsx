@@ -48,6 +48,7 @@ export default function PatientOverview() {
     const latestEncounter = profile?.encounters?.[0];
     const latestLab = latestEncounter?.labResult;
     const latestPred = latestEncounter?.predictions?.[0];
+    const nextAppointment = profile?.appointments?.[0];
 
     const healthMetrics = [
         { label: "Albumin", value: latestLab?.albumin ?? "N/A", status: "Level", color: "blue", icon: Droplets },
@@ -149,46 +150,69 @@ export default function PatientOverview() {
                     <div>
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-bold text-text-primary">Next Consultation</h3>
-                            <button className="text-text-muted hover:text-primary transition-colors">
+                            <Link href="/patient/appointments" className="text-text-muted hover:text-primary transition-colors">
                                 <Search className="w-4 h-4" />
-                            </button>
+                            </Link>
                         </div>
-
-                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-surface border border-border-light mb-6">
-                            <div className="w-14 h-14 rounded-xl overflow-hidden relative">
-                                <Image
-                                    src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop"
-                                    alt="Doctor"
-                                    fill
-                                    className="object-cover"
-                                />
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-text-primary text-sm">Dr. Sarah Mitchell</h4>
-                                <p className="text-xs text-primary font-semibold">Kidney Specialist</p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3 text-text-secondary">
-                                <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center">
-                                    <Calendar className="w-4 h-4" />
+                        
+                        {nextAppointment ? (
+                            <>
+                                <div className="flex items-center gap-4 p-4 rounded-2xl bg-surface border border-border-light mb-6">
+                                    <div className="w-14 h-14 rounded-xl overflow-hidden relative bg-slate-200">
+                                        {nextAppointment.doctor?.profile_photo_url ? (
+                                            <Image
+                                                src={nextAppointment.doctor.profile_photo_url}
+                                                alt="Doctor"
+                                                fill
+                                                className="object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                                                <Heart className="w-6 h-6" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-text-primary text-sm">Dr. {nextAppointment.doctor?.user?.full_name?.split(' ')[0] || 'Specialist'}</h4>
+                                        <p className="text-[11px] font-bold text-primary uppercase tracking-wider">{nextAppointment.doctor?.specialization || 'Consultant'}</p>
+                                    </div>
                                 </div>
-                                <span className="text-sm font-medium">Monday, Feb 28, 2026</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-text-secondary">
-                                <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center">
-                                    <Clock className="w-4 h-4" />
+
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3 text-text-secondary">
+                                        <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center">
+                                            <Calendar className="w-4 h-4" />
+                                        </div>
+                                        <span className="text-sm font-medium">{format(new Date(nextAppointment.scheduled_start), "EEEE, MMM dd, yyyy")}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-text-secondary">
+                                        <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center">
+                                            <Clock className="w-4 h-4" />
+                                        </div>
+                                        <span className="text-sm font-medium">
+                                            {format(new Date(nextAppointment.scheduled_start), "hh:mm a")} 
+                                            {nextAppointment.scheduled_end ? ` - ${format(new Date(nextAppointment.scheduled_end), "hh:mm a")}` : ' (30m)'}
+                                        </span>
+                                    </div>
                                 </div>
-                                <span className="text-sm font-medium">10:30 AM - 11:30 AM</span>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center text-center py-6">
+                                <div className="w-16 h-16 bg-slate-50 flex items-center justify-center rounded-full mb-3 shadow-inner">
+                                    <Calendar className="w-6 h-6 text-slate-300" />
+                                </div>
+                                <p className="text-sm font-bold text-text-primary">No upcoming visits</p>
+                                <p className="text-xs text-text-muted mt-1 max-w-[200px]">You don't have any pending real-time consultations scheduled.</p>
                             </div>
-                        </div>
+                        )}
                     </div>
 
-                    <button className="w-full mt-8 py-3.5 rounded-2xl bg-primary/10 border border-primary/20 text-primary font-bold text-sm hover:bg-primary/20 transition-all flex items-center justify-center gap-2">
-                        Get Preparation Guideline
-                        <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <Link href={nextAppointment ? "/patient/appointments" : "/patient/book"}>
+                        <button className="w-full mt-8 py-3.5 rounded-2xl bg-primary/10 border border-primary/20 text-primary font-bold text-sm hover:bg-primary/20 transition-all flex items-center justify-center gap-2">
+                            {nextAppointment ? "Get Preparation Guideline" : "Book New Appointment"}
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </Link>
                 </motion.div>
             </div>
 

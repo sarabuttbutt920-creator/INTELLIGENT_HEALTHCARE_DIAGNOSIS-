@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Activity,
@@ -45,79 +45,7 @@ interface HealthSummary {
     familyHistory: { relation: string; condition: string }[];
 }
 
-// --- Mock Data ---
-const mockHistoryEvents: HistoryEvent[] = [
-    {
-        id: "EVT-1",
-        date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-        type: "LAB_TEST",
-        title: "Comprehensive Metabolic Panel (CMP)",
-        provider: "LabCorp Diagnostics",
-        description: "Routine blood work analyzing kidney function. Elevated serum creatinine levels detected compared to previous baseline.",
-        status: "COMPLETED",
-        tags: ["KidneyNet", "eGFR", "Creatinine"]
-    },
-    {
-        id: "EVT-2",
-        date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 45).toISOString(),
-        type: "DIAGNOSIS",
-        title: "Chronic Kidney Disease (Stage 3a)",
-        provider: "Dr. Sarah Jenkins",
-        description: "Initial diagnosis based on consecutive eGFR readings between 45-59 mL/min and presence of microalbuminuria.",
-        status: "ACTIVE",
-        tags: ["Nephrology", "Chronic"]
-    },
-    {
-        id: "EVT-3",
-        date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 120).toISOString(),
-        type: "CONSULTATION",
-        title: "Hypertension Management Review",
-        provider: "Dr. Marcus Vance",
-        description: "Adjusted Lisinopril dosage to 10mg daily to better manage systemic blood pressure and protect renal function.",
-        status: "COMPLETED"
-    },
-    {
-        id: "EVT-4",
-        date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 2).toISOString(),
-        type: "IMMUNIZATION",
-        title: "Influenza Vaccine (Quadrivalent)",
-        provider: "MediIntel Primary Care",
-        description: "Annual flu vaccination administered. No adverse reactions reported.",
-        status: "COMPLETED"
-    },
-    {
-        id: "EVT-5",
-        date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 5).toISOString(),
-        type: "SURGERY",
-        title: "Appendectomy (Laparoscopic)",
-        provider: "General Hospital Surgery Dept.",
-        description: "Emergency removal of inflamed appendix. Uncomplicated recovery.",
-        status: "RESOLVED"
-    }
-];
-
-const mockSummary: HealthSummary = {
-    conditions: [
-        { name: "Chronic Kidney Disease (Stage 3a)", dateDiagnosed: "2026-01-10", status: "Active", icon: Activity, color: "rose" },
-        { name: "Essential Hypertension", dateDiagnosed: "2024-05-15", status: "Managed", icon: HeartPulse, color: "amber" },
-        { name: "Type 2 Diabetes Mellitus", dateDiagnosed: "2023-11-02", status: "Managed", icon: Activity, color: "blue" }
-    ],
-    allergies: [
-        { substance: "Penicillin", reaction: "Hives, Anaphylaxis Risk", severity: "Severe" },
-        { substance: "Pollen", reaction: "Allergic Rhinitis", severity: "Mild" }
-    ],
-    immunizations: [
-        { name: "COVID-19 Bivalent Booster", date: "2025-10-15", status: "Up to date" },
-        { name: "Influenza (Seasonal)", date: "2025-09-01", status: "Up to date" },
-        { name: "Pneumococcal Conjugate", date: "2020-04-10", status: "Due Soon" }
-    ],
-    familyHistory: [
-        { relation: "Father", condition: "Coronary Artery Disease" },
-        { relation: "Mother", condition: "Type 2 Diabetes" }
-    ]
-};
-
-// --- Helpers ---
+// --- Frontend Map ---
 const eventTypeStyles: Record<HistoryEventType, { icon: any, color: string, label: string }> = {
     DIAGNOSIS: { icon: AlertTriangle, color: "rose", label: "Diagnosis" },
     SURGERY: { icon: Activity, color: "indigo", label: "Surgery/Procedure" },
@@ -126,19 +54,56 @@ const eventTypeStyles: Record<HistoryEventType, { icon: any, color: string, labe
     CONSULTATION: { icon: Stethoscope, color: "amber", label: "Clinical Consult" }
 };
 
+const getConditionIcon = (color: string) => {
+    if (color === "rose") return Activity;
+    if (color === "amber") return HeartPulse;
+    if (color === "blue") return Activity;
+    if (color === "emerald") return CheckCircle2;
+    return Activity;
+};
+
+// --- Helpers ---
 export default function PatientHistoryPage() {
     // --- State ---
     const [activeTab, setActiveTab] = useState<"TIMELINE" | "SUMMARY">("SUMMARY");
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedType, setSelectedType] = useState<HistoryEventType | "ALL">("ALL");
+    const [historyEvents, setHistoryEvents] = useState<HistoryEvent[]>([]);
+    const [healthSummary, setHealthSummary] = useState<HealthSummary | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        fetch('/api/patient/history')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setHistoryEvents(data.historyEvents);
+                    setHealthSummary(data.healthSummary);
+                }
+                setIsLoading(false);
+            })
+            .catch(err => {
+                console.error("Failed to fetch history:", err);
+                setIsLoading(false);
+            });
+    }, []);
 
     // --- Derived Data ---
-    const filteredEvents = mockHistoryEvents.filter(event => {
+    const filteredEvents = historyEvents.filter(event => {
         const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             event.provider.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesType = selectedType === "ALL" || event.type === selectedType;
         return matchesSearch && matchesType;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    if (isLoading || !healthSummary) {
+        return (
+            <div className="flex flex-col items-center justify-center py-32 text-slate-400">
+                <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin mb-4" />
+                <p className="font-semibold text-sm">Syncing Secure Health Records...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto pb-10 space-y-6">
@@ -205,7 +170,7 @@ export default function PatientHistoryPage() {
                                 </div>
                             </div>
                             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {mockSummary.conditions.map((cond, idx) => (
+                                {healthSummary.conditions.map((cond, idx) => (
                                     <div key={idx} className="bg-surface rounded-2xl p-5 border border-border-light flex flex-col items-start gap-4 hover:border-primary/30 transition-colors">
                                         <div className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-widest ${cond.status === 'Active' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                             {cond.status}
@@ -238,12 +203,12 @@ export default function PatientHistoryPage() {
                                     <div className="col-span-1">Adverse Reaction</div>
                                     <div className="col-span-1 border-l pl-4 border-border-light">Severity</div>
                                 </div>
-                                {mockSummary.allergies.map((allergy, idx) => (
+                                {healthSummary.allergies.map((allergy, idx) => (
                                     <div key={idx} className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-border-light/50 last:border-0 hover:bg-slate-50 transition-colors">
                                         <div className="col-span-1 font-bold text-text-primary">{allergy.substance}</div>
                                         <div className="col-span-1 text-sm font-medium text-text-secondary">{allergy.reaction}</div>
                                         <div className="col-span-1 border-l pl-4 border-border-light">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest ${allergy.severity === 'Severe' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest ${allergy.severity === 'Severe' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                 {allergy.severity === 'Severe' ? <AlertTriangle className="w-3 h-3" /> : <Info className="w-3 h-3" />} {allergy.severity}
                                             </span>
                                         </div>
@@ -263,7 +228,7 @@ export default function PatientHistoryPage() {
                                     <h2 className="text-lg font-bold text-text-primary">Vaccines & Immunizations</h2>
                                 </div>
                                 <div className="flex-1 p-5 space-y-4">
-                                    {mockSummary.immunizations.map((vax, idx) => (
+                                    {healthSummary.immunizations.map((vax, idx) => (
                                         <div key={idx} className="flex justify-between items-center p-4 bg-surface rounded-2xl border border-border-light">
                                             <div>
                                                 <h4 className="font-bold text-sm text-text-primary">{vax.name}</h4>
@@ -286,7 +251,7 @@ export default function PatientHistoryPage() {
                                     <h2 className="text-lg font-bold text-text-primary">Family Medical History</h2>
                                 </div>
                                 <div className="flex-1 p-5 space-y-4">
-                                    {mockSummary.familyHistory.map((fam, idx) => (
+                                    {healthSummary.familyHistory.length > 0 ? healthSummary.familyHistory.map((fam, idx) => (
                                         <div key={idx} className="flex items-start gap-4 p-4 bg-surface rounded-2xl border border-border-light">
                                             <div className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold uppercase tracking-widest w-24 text-center shrink-0">
                                                 {fam.relation}
@@ -295,7 +260,9 @@ export default function PatientHistoryPage() {
                                                 <p className="font-bold text-sm text-text-primary">{fam.condition}</p>
                                             </div>
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <p className="text-sm font-medium text-text-muted px-2">No active self-reported family medical history tracked via the ML portal.</p>
+                                    )}
                                 </div>
                             </div>
                         </div>
