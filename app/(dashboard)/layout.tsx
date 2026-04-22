@@ -8,7 +8,6 @@ import {
     LayoutDashboard,
     Users,
     FileText,
-    Settings,
     LogOut,
     Bell,
     Search,
@@ -21,7 +20,6 @@ import {
     Stethoscope,
     User,
     MessageSquare,
-    Upload,
     Star,
     PieChart,
     History,
@@ -62,11 +60,15 @@ const sidebarLinks = {
     ]
 };
 
-export default function DashboardLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+interface DoctorProfile {
+    full_name: string;
+    specialization: string;
+    hospital_name?: string;
+    profile_photo_url?: string;
+    verification_status: string;
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const isAdmin = pathname.includes("/admin");
     const isDoctor = pathname.includes("/doctor");
@@ -78,8 +80,31 @@ export default function DashboardLayout({
     const [isNotifOpen, setIsNotifOpen] = useState(false);
     const router = useRouter();
 
-    // -- Notifications State --
-    const [notifications, setNotifications] = useState<{ appointments: number, messages: number, activities: any[] }>({ appointments: 0, messages: 0, activities: [] });
+    const [notifications, setNotifications] = useState<{ appointments: number; messages: number; activities: any[] }>({
+        appointments: 0, messages: 0, activities: []
+    });
+
+    const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
+
+    // Fetch doctor profile for header
+    useEffect(() => {
+        if (role === 'DOCTOR') {
+            fetch('/api/doctor/profile')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        setDoctorProfile({
+                            full_name: d.data.user.full_name,
+                            specialization: d.data.specialization,
+                            hospital_name: d.data.hospital_name,
+                            profile_photo_url: d.data.profile_photo_url,
+                            verification_status: d.data.verification_status
+                        });
+                    }
+                })
+                .catch(() => {});
+        }
+    }, [role]);
 
     useEffect(() => {
         if (role !== 'ADMIN') {
@@ -88,18 +113,17 @@ export default function DashboardLayout({
                     const res = await fetch('/api/notifications');
                     const data = await res.json();
                     if (data.success) {
-                        setNotifications({ 
-                            appointments: data.appointments || 0, 
+                        setNotifications({
+                            appointments: data.appointments || 0,
                             messages: data.messages || 0,
                             activities: data.activities || []
                         });
                     }
-                } catch (e) { console.error('Error fetching notifications:', e); }
+                } catch (e) { /* silent */ }
             };
             fetchNotifs();
-            // Refresh every 30 seconds for "real-time" feel
-            const intervalId = setInterval(fetchNotifs, 30000);
-            return () => clearInterval(intervalId);
+            const id = setInterval(fetchNotifs, 30000);
+            return () => clearInterval(id);
         }
     }, [role]);
 
@@ -107,18 +131,25 @@ export default function DashboardLayout({
         try {
             await fetch("/api/auth/logout", { method: "POST" });
             router.push("/login");
-        } catch (error) {
-            console.error("Logout failed", error);
-        }
+        } catch { /* silent */ }
     };
+
+    const displayName = role === 'DOCTOR' && doctorProfile
+        ? `Dr. ${doctorProfile.full_name}`
+        : role === 'PATIENT' ? 'Patient' : 'Admin';
+
+    const displaySubtitle = role === 'DOCTOR' && doctorProfile
+        ? doctorProfile.specialization
+        : role.charAt(0) + role.slice(1).toLowerCase();
+
+    const avatarInitial = role === 'DOCTOR' && doctorProfile
+        ? doctorProfile.full_name.charAt(0).toUpperCase()
+        : role.charAt(0);
 
     return (
         <div className="min-h-screen bg-surface flex">
             {/* Sidebar - Desktop */}
-            <aside
-                className={`fixed left-0 top-0 h-screen bg-white border-r border-border-light z-30 transition-all duration-300 hidden lg:block ${isSidebarOpen ? "w-64" : "w-20"
-                    }`}
-            >
+            <aside className={`fixed left-0 top-0 h-screen bg-white border-r border-border-light z-30 transition-all duration-300 hidden lg:block ${isSidebarOpen ? "w-64" : "w-20"}`}>
                 <div className="h-full flex flex-col justify-between py-6">
                     <div>
                         {/* Logo */}
@@ -143,13 +174,11 @@ export default function DashboardLayout({
                                         href={link.href}
                                         className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative ${isActive
                                             ? "bg-primary/10 text-primary font-semibold"
-                                            : "text-text-secondary hover:bg-surface hover:text-text-primary"
-                                            }`}
+                                            : "text-text-secondary hover:bg-surface hover:text-text-primary"}`}
                                     >
                                         <link.icon className={`w-5 h-5 shrink-0 ${isActive ? "text-primary" : "group-hover:text-primary"}`} />
                                         {isSidebarOpen && <span className="text-sm flex-1">{link.label}</span>}
-                                        
-                                        {/* Notification Badges inside Sidebar */}
+
                                         {isSidebarOpen && link.label === "Appointments" && notifications.appointments > 0 && (
                                             <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
                                                 {notifications.appointments}
@@ -173,16 +202,35 @@ export default function DashboardLayout({
                         </nav>
                     </div>
 
-                    {/* Bottom Sidebar Content */}
+                    {/* Doctor Mini Card at Bottom */}
+                    {isSidebarOpen && role === 'DOCTOR' && doctorProfile && (
+                        <div className="px-3 mb-3">
+                            <div className="p-3 rounded-xl bg-primary/5 border border-primary/10">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center text-white font-bold text-sm shrink-0">
+                                        {avatarInitial}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-text-primary truncate">Dr. {doctorProfile.full_name}</p>
+                                        <p className="text-[10px] text-text-muted truncate">{doctorProfile.specialization}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="px-3">
-                        <button onClick={handleLogout} className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:bg-red-50 hover:text-red-500 transition-all duration-200 group ${!isSidebarOpen && "justify-center"}`}>
+                        <button
+                            onClick={handleLogout}
+                            className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:bg-red-50 hover:text-red-500 transition-all duration-200 group ${!isSidebarOpen && "justify-center"}`}
+                        >
                             <LogOut className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
                             {isSidebarOpen && <span className="text-sm font-medium">Log out</span>}
                         </button>
 
                         <button
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className="mt-6 w-full flex items-center justify-center p-2 rounded-lg bg-surface hover:bg-border-light transition-colors"
+                            className="mt-4 w-full flex items-center justify-center p-2 rounded-lg bg-surface hover:bg-border-light transition-colors"
                         >
                             <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${isSidebarOpen ? "rotate-180" : ""}`} />
                         </button>
@@ -204,19 +252,20 @@ export default function DashboardLayout({
             {/* Content Area */}
             <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "lg:ml-64" : "lg:ml-20"}`}>
                 {/* Desktop Top Header */}
-                <header className="hidden lg:flex sticky top-0 h-20 bg-white/80 backdrop-blur-md border-b border-border-light z-20 px-8 items-center justify-between">
+                <header className="hidden lg:flex sticky top-0 h-20 bg-white/90 backdrop-blur-md border-b border-border-light z-20 px-8 items-center justify-between shadow-sm">
                     <div className="relative w-96">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
                         <input
                             type="text"
-                            placeholder="Search patients, results..."
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface border-none focus:ring-2 focus:ring-primary/20 text-sm"
+                            placeholder="Search patients, records, reports..."
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface border border-border-light focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm outline-none transition-all"
                         />
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* Notification Bell */}
                         <div className="relative">
-                            <button 
+                            <button
                                 onClick={() => setIsNotifOpen(!isNotifOpen)}
                                 className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isNotifOpen ? 'bg-primary/10 text-primary' : 'bg-surface text-text-secondary hover:bg-border-light'}`}
                             >
@@ -228,14 +277,13 @@ export default function DashboardLayout({
                                 )}
                             </button>
 
-                            {/* Notification Dropdown */}
                             <AnimatePresence>
                                 {isNotifOpen && (
                                     <motion.div
                                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                        className="absolute right-0 top-14 w-80 bg-white rounded-2xl border border-border-light shadow-xl overflow-hidden z-50 flex flex-col"
+                                        className="absolute right-0 top-14 w-80 bg-white rounded-2xl border border-border-light shadow-xl overflow-hidden z-50"
                                     >
                                         <div className="px-4 py-3 border-b border-border-light flex items-center justify-between bg-surface/50">
                                             <h3 className="font-bold text-text-primary text-sm">Activity Notifications</h3>
@@ -243,9 +291,9 @@ export default function DashboardLayout({
                                         </div>
                                         <div className="max-h-80 overflow-y-auto p-2">
                                             {notifications.activities.length === 0 ? (
-                                                <div className="py-8 text-center text-text-muted flex flex-col items-center justify-center">
+                                                <div className="py-8 text-center text-text-muted flex flex-col items-center">
                                                     <Bell className="w-8 h-8 opacity-20 mb-2" />
-                                                    <p className="text-sm">You are all caught up!</p>
+                                                    <p className="text-sm">All caught up!</p>
                                                 </div>
                                             ) : (
                                                 notifications.activities.map((act) => (
@@ -257,34 +305,46 @@ export default function DashboardLayout({
                                                             <div>
                                                                 <p className="text-xs font-bold text-text-primary group-hover:text-primary transition-colors">{act.title}</p>
                                                                 <p className="text-xs text-text-secondary leading-snug mt-0.5">{act.message}</p>
-                                                                <p className="text-[9px] text-text-muted mt-1 uppercase tracking-wider font-semibold">Just now</p>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 ))
                                             )}
                                         </div>
-                                        {notifications.activities.length > 0 && (
-                                            <div className="p-2 border-t border-border-light bg-surface/50">
-                                                <button className="w-full py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg transition-colors">
-                                                    Mark All As Read
-                                                </button>
-                                            </div>
-                                        )}
                                     </motion.div>
                                 )}
                             </AnimatePresence>
                         </div>
-                        <div className="h-8 w-px bg-border-light mx-2" />
-                        <div className="flex items-center gap-3">
+
+                        <div className="h-8 w-px bg-border-light" />
+
+                        {/* Doctor/User Info Block */}
+                        <Link href={role === 'DOCTOR' ? '/doctor/profile' : '#'} className="flex items-center gap-3 group">
                             <div className="text-right">
-                                <p className="text-sm font-bold text-text-primary capitalize">{role.toLowerCase()} User</p>
-                                <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{role}</p>
+                                <p className="text-sm font-bold text-text-primary group-hover:text-primary transition-colors">
+                                    {displayName}
+                                </p>
+                                <p className="text-[10px] font-semibold text-primary uppercase tracking-wider truncate max-w-[160px]">
+                                    {displaySubtitle}
+                                </p>
                             </div>
-                            <div className="w-10 h-10 rounded-xl gradient-primary border-2 border-white flex items-center justify-center text-white font-bold">
-                                {role[0]}
-                            </div>
-                        </div>
+
+                            {doctorProfile?.profile_photo_url ? (
+                                <img
+                                    src={doctorProfile.profile_photo_url}
+                                    alt="Profile"
+                                    className="w-10 h-10 rounded-xl object-cover border-2 border-primary/20 shadow-sm"
+                                />
+                            ) : (
+                                <div className="w-10 h-10 rounded-xl gradient-primary border-2 border-white flex items-center justify-center text-white font-bold shadow-sm group-hover:shadow-md transition-shadow">
+                                    {avatarInitial}
+                                </div>
+                            )}
+
+                            {role === 'DOCTOR' && doctorProfile?.verification_status === 'APPROVED' && (
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 absolute ml-8 mt-6" title="Verified Doctor" />
+                            )}
+                        </Link>
                     </div>
                 </header>
 
@@ -317,6 +377,24 @@ export default function DashboardLayout({
                                 </div>
                                 <span className="text-xl font-bold tracking-tight">IHDS</span>
                             </div>
+
+                            {role === 'DOCTOR' && doctorProfile && (
+                                <div className="mb-6 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center text-white font-bold text-lg">
+                                            {avatarInitial}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-text-primary">Dr. {doctorProfile.full_name}</p>
+                                            <p className="text-xs text-primary font-semibold">{doctorProfile.specialization}</p>
+                                            {doctorProfile.hospital_name && (
+                                                <p className="text-[10px] text-text-muted">{doctorProfile.hospital_name}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <nav className="space-y-1">
                                 {links.map((link) => (
                                     <Link
@@ -340,6 +418,7 @@ export default function DashboardLayout({
                                     </Link>
                                 ))}
                             </nav>
+
                             <div className="absolute bottom-6 left-6 right-6">
                                 <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 text-red-500 font-semibold hover:bg-red-100 transition-colors">
                                     <LogOut className="w-4 h-4" />

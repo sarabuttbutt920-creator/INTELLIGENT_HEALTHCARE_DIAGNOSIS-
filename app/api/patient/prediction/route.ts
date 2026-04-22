@@ -104,7 +104,7 @@ export async function POST(req: Request) {
         // ── Call the Flask prediction microservice ─────────────────────────────
         let flaskResponse: Response;
         try {
-            flaskResponse = await fetch(`${FLASK_API_URL}/predict`, {
+            flaskResponse = await fetch(`${FLASK_API_URL}/api/ckd/predict`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(modelPayload),
