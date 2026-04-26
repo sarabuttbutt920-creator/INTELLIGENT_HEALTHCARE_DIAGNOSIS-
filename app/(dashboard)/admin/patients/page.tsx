@@ -46,104 +46,7 @@ interface Patient {
 }
 
 // --- Mock Data ---
-const mockPatients: Patient[] = [
-    {
-        id: "PAT-8041",
-        fullName: "Michael Chen",
-        email: "m.chen88@gmail.com",
-        phone: "+1 (555) 987-6543",
-        dateOfBirth: "1988-05-14",
-        gender: "MALE",
-        bloodGroup: "O+",
-        emerContactName: "Sarah Chen",
-        emerContactPhone: "+1 (555) 987-6544",
-        totalEncounters: 5,
-        predictionsCount: 2,
-        status: "active",
-        joinedAt: "2024-01-10T11:20:00Z",
-        avatar: "M"
-    },
-    {
-        id: "PAT-8042",
-        fullName: "Emily Rodriguez",
-        email: "emily.rod@outlook.com",
-        phone: "+1 (555) 456-7890",
-        dateOfBirth: "1992-08-22",
-        gender: "FEMALE",
-        bloodGroup: "A-",
-        emerContactName: "Carlos Rodriguez",
-        emerContactPhone: "+1 (555) 456-7891",
-        totalEncounters: 1,
-        predictionsCount: 0,
-        status: "inactive",
-        joinedAt: "2023-12-05T16:00:00Z",
-        avatar: "E"
-    },
-    {
-        id: "PAT-8043",
-        fullName: "Lisa Thompson",
-        email: "lisa.thompson@hotmail.com",
-        phone: "+1 (555) 789-0123",
-        dateOfBirth: "1975-11-03",
-        gender: "FEMALE",
-        bloodGroup: "B+",
-        emerContactName: "David Thompson",
-        emerContactPhone: "+1 (555) 789-0124",
-        totalEncounters: 8,
-        predictionsCount: 4,
-        status: "active",
-        joinedAt: "2024-02-01T14:15:00Z",
-        avatar: "L"
-    },
-    {
-        id: "PAT-8044",
-        fullName: "Robert Taylor",
-        email: "rtaylor.77@gmail.com",
-        phone: "+1 (555) 222-3333",
-        dateOfBirth: "1968-02-19",
-        gender: "MALE",
-        bloodGroup: "AB+",
-        emerContactName: "Mary Taylor",
-        emerContactPhone: "+1 (555) 222-3334",
-        totalEncounters: 12,
-        predictionsCount: 6,
-        status: "active",
-        joinedAt: "2023-09-15T09:30:00Z",
-        avatar: "R"
-    },
-    {
-        id: "PAT-8045",
-        fullName: "Alex Jordan",
-        email: "alex.jordan@mail.com",
-        phone: "+1 (555) 666-7777",
-        dateOfBirth: "1995-07-30",
-        gender: "OTHER",
-        bloodGroup: "O-",
-        emerContactName: "Sam Jordan",
-        emerContactPhone: "+1 (555) 666-7778",
-        totalEncounters: 2,
-        predictionsCount: 1,
-        status: "active",
-        joinedAt: "2024-02-15T10:00:00Z",
-        avatar: "A"
-    },
-    {
-        id: "PAT-8046",
-        fullName: "Thomas Anderson",
-        email: "neo.matrix@company.com",
-        phone: "+1 (555) 111-0000",
-        dateOfBirth: "1982-03-24",
-        gender: "MALE",
-        bloodGroup: "A+",
-        emerContactName: "Trinity Anderson",
-        emerContactPhone: "+1 (555) 111-0001",
-        totalEncounters: 0,
-        predictionsCount: 0,
-        status: "inactive",
-        joinedAt: "2024-02-20T08:45:00Z",
-        avatar: "T"
-    }
-];
+const mockPatients: Patient[] = []; // Replaced with API data
 
 // --- Helpers ---
 const getAge = (dob: string) => {
@@ -158,12 +61,30 @@ const genderColors = {
 
 export default function ManagePatientsPage() {
     // --- State ---
-    const [patients, setPatients] = useState<Patient[]>(mockPatients);
+    const [patients, setPatients] = useState<Patient[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState<PatientStatus | "ALL">("ALL");
     const [genderFilter, setGenderFilter] = useState<string>("ALL");
     const [bloodGroupFilter, setBloodGroupFilter] = useState<string>("ALL");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchPatients = async () => {
+            try {
+                const res = await fetch('/api/admin/patients');
+                const data = await res.json();
+                if (data.success) {
+                    setPatients(data.patients);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchPatients();
+    }, []);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -378,8 +299,15 @@ export default function ManagePatientsPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            <AnimatePresence>
-                                {paginatedPatients.length === 0 ? (
+                                <AnimatePresence>
+                                {isLoading ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-12 text-center text-text-muted">
+                                            <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto mb-3" />
+                                            <p className="font-medium text-lg text-text-secondary">Loading patients...</p>
+                                        </td>
+                                    </tr>
+                                ) : paginatedPatients.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-12 text-center text-text-muted">
                                             <User className="w-12 h-12 mx-auto mb-3 opacity-20" />

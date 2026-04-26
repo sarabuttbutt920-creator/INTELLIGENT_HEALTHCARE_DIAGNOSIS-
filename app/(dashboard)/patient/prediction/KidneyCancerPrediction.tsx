@@ -50,7 +50,7 @@ export default function KidneyCancerPrediction({ onBack }: { onBack: () => void 
             const formData = new FormData();
             formData.append("file", file);
 
-            const res = await fetch('http://localhost:5000/api/kidney-cancer/predict', {
+            const res = await fetch('/api/patient/kidney-cancer/predict', {
                 method: 'POST',
                 body: formData,
             });

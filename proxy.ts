@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function proxy(request: NextRequest) {
+    // Enforce HTTPS in production
+    if (
+        process.env.NODE_ENV === 'production' &&
+        request.headers.get('x-forwarded-proto') !== 'https' &&
+        !request.nextUrl.pathname.startsWith('/api/')
+    ) {
+        return NextResponse.redirect(`https://${request.headers.get('host')}${request.nextUrl.pathname}`, 301);
+    }
+
     const { pathname } = request.nextUrl;
 
     // Explicit Protected Boundaries
@@ -64,5 +73,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/admin/:path*', '/doctor/:path*', '/patient/:path*', '/login', '/signup'],
+    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|uploads).*)'],
 };

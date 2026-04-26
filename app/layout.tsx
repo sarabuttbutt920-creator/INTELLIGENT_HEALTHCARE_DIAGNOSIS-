@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import VisitorLogger from "@/components/VisitorLogger";
 
 /* Load Inter font from Google Fonts for clean medical typography */
 const inter = Inter({
@@ -31,6 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth">
       <body className={`${inter.variable} font-sans antialiased`}>
+        <VisitorLogger />
         {children}
       </body>
     </html>

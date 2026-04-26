@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     UploadCloud,
@@ -40,40 +40,10 @@ interface MedicalFile {
     uploadDate: string;
     status: "UPLOADED" | "PROCESSING" | "ANALYZING";
     notes?: string;
+    url?: string;
 }
 
-const mockFiles: MedicalFile[] = [
-    {
-        id: "IMG-001",
-        name: "Kidney_MRI_Coronal_View_2025.dcm",
-        size: 45000000,
-        type: "application/dicom",
-        category: "MRI",
-        uploadDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-        status: "UPLOADED",
-        notes: "Coronal view showing bilateral kidneys. No significant hydronephrosis detected."
-    },
-    {
-        id: "IMG-002",
-        name: "Abdominal_XRay_Anterior.png",
-        size: 8500000,
-        type: "image/png",
-        category: "XRAY",
-        uploadDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-        status: "UPLOADED",
-        notes: "AP view of abdomen. Kidney silhouettes within normal size limits."
-    },
-    {
-        id: "RPT-001",
-        name: "Nephrology_Consultation_Report.pdf",
-        size: 2400000,
-        type: "application/pdf",
-        category: "MEDICAL_REPORT",
-        uploadDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
-        status: "UPLOADED",
-        notes: "Follow-up consultation after CKD screening. Recommend dietary modifications and monthly labs."
-    },
-];
+// Mock files removed, fetching from API
 
 const categoryConfig: Record<FileCategory, {
     label: string; icon: React.ElementType; color: string; bg: string; border: string; gradient: string;
@@ -110,7 +80,8 @@ const formatDate = (dateStr: string) => {
 };
 
 export default function MedicalImagingPage() {
-    const [files, setFiles] = useState<MedicalFile[]>(mockFiles);
+    const [files, setFiles] = useState<MedicalFile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterCategory, setFilterCategory] = useState<FileCategory | "ALL">("ALL");
     const [isDragging, setIsDragging] = useState(false);
@@ -131,6 +102,25 @@ export default function MedicalImagingPage() {
     const reportCount = files.filter(f => f.category === "MEDICAL_REPORT").length;
     const totalStorage = files.reduce((acc, f) => acc + f.size, 0);
 
+    const fetchFiles = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetch('/api/patient/files');
+            const data = await res.json();
+            if (data.success) {
+                setFiles(data.files);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchFiles();
+    }, [fetchFiles]);
+
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(true);
@@ -141,36 +131,37 @@ export default function MedicalImagingPage() {
         setIsDragging(false);
     }, []);
 
-    const processFiles = useCallback((uploadedFiles: FileList | File[]) => {
+    const processFiles = useCallback(async (uploadedFiles: FileList | File[]) => {
         if (!uploadedFiles || uploadedFiles.length === 0) return;
         setIsUploading(true);
         setUploadProgress(0);
 
-        const interval = setInterval(() => {
-            setUploadProgress(prev => {
-                if (prev >= 100) { clearInterval(interval); return 100; }
-                return prev + 10;
+        const formData = new FormData();
+        Array.from(uploadedFiles).forEach(f => formData.append('file', f));
+        formData.append('category', uploadCategory);
+
+        try {
+            const res = await fetch('/api/patient/files', {
+                method: 'POST',
+                body: formData
             });
-        }, 180);
-
-        setTimeout(() => {
-            clearInterval(interval);
+            const data = await res.json();
+            if (data.success) {
+                setUploadProgress(100);
+                setTimeout(() => {
+                    setIsUploading(false);
+                    setUploadProgress(0);
+                    fetchFiles();
+                }, 500);
+            } else {
+                setIsUploading(false);
+                alert('Upload failed');
+            }
+        } catch (e) {
+            console.error(e);
             setIsUploading(false);
-            setUploadProgress(0);
-
-            const newFiles: MedicalFile[] = Array.from(uploadedFiles).map((file, idx) => ({
-                id: `NEW-${Date.now()}-${idx}`,
-                name: file.name,
-                size: file.size,
-                type: file.type,
-                category: uploadCategory,
-                uploadDate: new Date().toISOString(),
-                status: "UPLOADED"
-            }));
-
-            setFiles(prev => [...newFiles, ...prev]);
-        }, 2200);
-    }, [uploadCategory]);
+        }
+    }, [uploadCategory, fetchFiles]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -186,9 +177,19 @@ export default function MedicalImagingPage() {
         }
     }, [processFiles]);
 
-    const handleDelete = useCallback((id: string) => {
-        if (previewFile?.id === id) setPreviewFile(null);
-        setFiles(prev => prev.filter(f => f.id !== id));
+    const handleDelete = useCallback(async (id: string) => {
+        const confirmDelete = window.confirm("Are you sure you want to delete this file?");
+        if (!confirmDelete) return;
+
+        try {
+            const res = await fetch(`/api/patient/files/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                if (previewFile?.id === id) setPreviewFile(null);
+                setFiles(prev => prev.filter(f => f.id !== id));
+            }
+        } catch (e) {
+            console.error(e);
+        }
     }, [previewFile]);
 
     return (
@@ -449,7 +450,11 @@ export default function MedicalImagingPage() {
                 </div>
 
                 <div className="p-4 md:p-6">
-                    {filteredFiles.length === 0 ? (
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-20">
+                            <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                        </div>
+                    ) : filteredFiles.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-12 text-center text-text-muted">
                             <FileImage className="w-16 h-16 mb-4 opacity-20" />
                             <h3 className="text-xl font-bold text-text-primary mb-2">No files found</h3>
@@ -489,9 +494,9 @@ export default function MedicalImagingPage() {
                                                     >
                                                         <Eye className="w-3.5 h-3.5 text-white" />
                                                     </button>
-                                                    <button className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/40 transition-colors" title="Download">
+                                                    <a href={file.url} download target="_blank" rel="noreferrer" className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/40 transition-colors" title="Download">
                                                         <Download className="w-3.5 h-3.5 text-white" />
-                                                    </button>
+                                                    </a>
                                                     <button
                                                         onClick={() => handleDelete(file.id)}
                                                         className="p-1.5 bg-red-500/40 backdrop-blur-sm rounded-lg hover:bg-red-500/70 transition-colors"
@@ -620,9 +625,9 @@ export default function MedicalImagingPage() {
                                                 >
                                                     Close
                                                 </button>
-                                                <button className="flex-1 px-4 py-3 rounded-xl gradient-primary text-white font-bold shadow-md shadow-primary/20 flex items-center justify-center gap-2">
+                                                <a href={previewFile.url} download target="_blank" rel="noreferrer" className="flex-1 px-4 py-3 rounded-xl gradient-primary text-white font-bold shadow-md shadow-primary/20 flex items-center justify-center gap-2 hover:opacity-90">
                                                     <Download className="w-4 h-4" /> Download File
-                                                </button>
+                                                </a>
                                             </div>
                                         </div>
                                     </>
