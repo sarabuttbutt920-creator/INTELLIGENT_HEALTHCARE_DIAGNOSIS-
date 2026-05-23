@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Activity,
@@ -13,7 +13,6 @@ import {
     ArrowLeft,
     CheckCircle2,
     TestTube,
-    FileText,
     Zap,
     Beaker,
     User,
@@ -22,14 +21,6 @@ import {
     TrendingUp,
     Cigarette,
     Heart,
-    UploadCloud,
-    Brain,
-    Bone,
-    X,
-    FileImage,
-    Trash2,
-    ScanSearch,
-    FlaskConical,
     Info,
     Download,
     Stethoscope,
@@ -44,30 +35,20 @@ import { differenceInYears, parseISO, format } from "date-fns";
 // ─── Types ──────────────────────────────────────────────────────────────────────
 type StepNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
-type UploadCategory = "MRI" | "XRAY" | "REPORT";
-
-interface UploadedFile {
-    id: string;
-    name: string;
-    size: number;
-    category: UploadCategory;
-    type: string;
-}
-
-interface ReportAnalysis {
-    fileId: string;
-    fileName: string;
-    documentType: string;
-    riskLevel: 'HIGH' | 'MODERATE' | 'LOW' | 'NORMAL' | 'INCONCLUSIVE';
-    confidence: number;
-    summary: string;
-    kidneyFindings: Record<string, unknown>;
-    conditions: Record<string, unknown>;
-    ckdRiskIndicators: string[];
-    recommendations: string;
-    extractedFormValues: Record<string, string>;
-    error?: string;
-}
+// interface ReportAnalysis {
+//     fileId: string;
+//     fileName: string;
+//     documentType: string;
+//     riskLevel: 'HIGH' | 'MODERATE' | 'LOW' | 'NORMAL' | 'INCONCLUSIVE';
+//     confidence: number;
+//     summary: string;
+//     kidneyFindings: Record<string, unknown>;
+//     conditions: Record<string, unknown>;
+//     ckdRiskIndicators: string[];
+//     recommendations: string;
+//     extractedFormValues: Record<string, string>;
+//     error?: string;
+// }
 
 interface PredictionFormData {
     // Demographics
@@ -137,17 +118,11 @@ const stepsConfig = [
     { num: 7, label: "Medical History", icon: ClipboardList, color: "text-orange-500", bgActive: "bg-orange-500", bgLight: "bg-orange-50", borderColor: "border-orange-200" },
     ];
 
-const uploadCategoryConfig: Record<UploadCategory, { label: string; icon: React.ElementType; color: string; bg: string; border: string }> = {
-    MRI: { label: "MRI Scan", icon: Brain, color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
-    XRAY: { label: "X-Ray Image", icon: Bone, color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
-    REPORT: { label: "Medical Report", icon: FileText, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
-};
-
-const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-};
+// const formatFileSize = (bytes: number) => {
+//     if (bytes < 1024) return bytes + " B";
+//     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+//     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+// };
 
 // ─── Reusable Input Components ──────────────────────────────────────────────────
 function NumberInput({
@@ -537,6 +512,7 @@ async function downloadPDFReport(
 
 // ─── Main Page Component ────────────────────────────────────────────────────────
 export default function CkdPrediction({ onBack }: { onBack: () => void }) {
+    // entryMethod removed
     const [step, setStep] = useState<StepNumber>(1);
     const [formData, setFormData] = useState<PredictionFormData>(initialFormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -547,6 +523,7 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [predictionError, setPredictionError] = useState<string | null>(null);
 
+    // OCR State removed
     // Initial load for demographics
     useEffect(() => {
         fetch('/api/patient/profile')
@@ -564,16 +541,7 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
             .catch(err => console.error("Error fetching patient base profile", err));
     }, []);
 
-    // Upload state
-    const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-    const [activeUploadCategory, setActiveUploadCategory] = useState<UploadCategory>("MRI");
-    const [isDragging, setIsDragging] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    // Actual File objects stored in a ref (not state) to avoid re-render overhead
-    const fileObjectsRef = useRef<Map<string, File>>(new Map());
-    // Report analysis state
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [reportAnalyses, setReportAnalyses] = useState<ReportAnalysis[]>([]);
+    // Upload state removed
 
     const updateForm = useCallback((field: keyof PredictionFormData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -596,40 +564,9 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
     const nextStep = () => setStep(prev => Math.min(prev + 1, TOTAL_STEPS + 1) as StepNumber);
     const prevStep = () => setStep(prev => Math.max(prev - 1, 1) as StepNumber);
 
-    // Upload handlers
-    const handleFileUpload = useCallback((files: FileList | null) => {
-        if (!files) return;
-        const newFiles: UploadedFile[] = Array.from(files).map((file, idx) => {
-            const id = `upload-${Date.now()}-${idx}`;
-            fileObjectsRef.current.set(id, file);   // store actual File
-            return { id, name: file.name, size: file.size, category: activeUploadCategory, type: file.type };
-        });
-        setUploadedFiles(prev => [...prev, ...newFiles]);
-        setReportAnalyses([]);   // reset analyses when new files are added
-    }, [activeUploadCategory]);
 
-    const removeUploadedFile = useCallback((id: string) => {
-        fileObjectsRef.current.delete(id);
-        setUploadedFiles(prev => prev.filter(f => f.id !== id));
-        setReportAnalyses(prev => prev.filter(a => a.fileId !== id));
-    }, []);
 
-    const handleDragOver = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(true);
-    }, []);
-
-    const handleDragLeave = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-    }, []);
-
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        handleFileUpload(e.dataTransfer.files);
-    }, [handleFileUpload]);
-
+    
     const handlePredict = async () => {
         setIsSubmitting(true);
         setPredictionError(null);
@@ -668,77 +605,7 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
         }
     };
 
-    // ── Report Analysis ────────────────────────────────────────────────────────
-    const analyzeReports = async () => {
-        if (uploadedFiles.length === 0 || isAnalyzing) return;
-        setIsAnalyzing(true);
-        setReportAnalyses([]);
 
-        const results: ReportAnalysis[] = [];
-        const mergedValues: Record<string, string> = {};
-
-        for (const uf of uploadedFiles) {
-            const file = fileObjectsRef.current.get(uf.id);
-            if (!file) continue;
-
-            const fd = new FormData();
-            fd.append('file', file);
-
-            try {
-                const res = await fetch('/api/patient/prediction/analyze-report', {
-                    method: 'POST', body: fd
-                });
-                const data = await res.json();
-
-                if (data.success) {
-                    results.push({
-                        fileId: uf.id,
-                        fileName: uf.name,
-                        documentType: data.document_type ?? 'UNKNOWN',
-                        riskLevel: data.risk_level ?? 'INCONCLUSIVE',
-                        confidence: data.analysis_confidence ?? 0,
-                        summary: data.summary ?? '',
-                        kidneyFindings: data.kidney_findings ?? {},
-                        conditions: data.conditions ?? {},
-                        ckdRiskIndicators: data.ckd_risk_indicators ?? [],
-                        recommendations: data.recommendations ?? '',
-                        extractedFormValues: data.extracted_form_values ?? {},
-                    });
-                    // Merge extracted values (later files override earlier)
-                    Object.assign(mergedValues, data.extracted_form_values ?? {});
-                } else {
-                    results.push({
-                        fileId: uf.id, fileName: uf.name,
-                        documentType: 'ERROR', riskLevel: 'INCONCLUSIVE',
-                        confidence: 0, summary: '', kidneyFindings: {},
-                        conditions: {}, ckdRiskIndicators: [],
-                        recommendations: '',
-                        extractedFormValues: {},
-                        error: data.message ?? data.error ?? 'Analysis failed',
-                    });
-                }
-            } catch (e) {
-                results.push({
-                    fileId: uf.id, fileName: uf.name,
-                    documentType: 'ERROR', riskLevel: 'INCONCLUSIVE',
-                    confidence: 0, summary: '', kidneyFindings: {},
-                    conditions: {}, ckdRiskIndicators: [],
-                    recommendations: '',
-                    extractedFormValues: {},
-                    error: 'Network error — could not reach analysis service.',
-                });
-            }
-        }
-
-        setReportAnalyses(results);
-
-        // Auto-populate form fields from extracted report values
-        if (Object.keys(mergedValues).length > 0) {
-            setFormData(prev => ({ ...prev, ...mergedValues }));
-        }
-
-        setIsAnalyzing(false);
-    };
 
     const resetPrediction = () => {
         setFormData(initialFormData);
@@ -748,10 +615,7 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
         setConfidence(0);
         setPredictionId(null);
         setFeedbackSubmitted(false);
-        setUploadedFiles([]);
-        setReportAnalyses([]);
-        fileObjectsRef.current.clear();
-        setStep(1);
+                                setStep(1);
     };
 
     const submitFeedback = async (isCorrect: boolean) => {
@@ -864,6 +728,8 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
 
                 <div className="p-6 md:p-8 flex-1 flex flex-col relative z-10">
                     <AnimatePresence mode="wait">
+
+
 
                         {/* ═══════ STEP 1: Demographics ═══════ */}
                         {step === 1 && (
@@ -1101,7 +967,7 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
                                             <ul className="space-y-1">
                                                 <li>• Python Flask service is running: <code className="bg-amber-100 px-1 rounded">python app.py</code></li>
                                                 <li>• Flask is on port <strong>5000</strong></li>
-                                                <li>• <code className="bg-amber-100 px-1 rounded">tunned_kidney_Cancer_model.pkl</code> is in the Prediction Model folder</li>
+                                                <li>• <code className="bg-amber-100 px-1 rounded">Kidney_Disease_Prediction_model.pkl</code> is in the Prediction Model folder</li>
                                                 <li>• <code className="bg-amber-100 px-1 rounded">flask-cors</code> is installed: <code className="bg-amber-100 px-1 rounded">pip install flask-cors</code></li>
                                             </ul>
                                         </div>
@@ -1486,7 +1352,7 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
                                 onClick={handlePredict}
                                 className="flex items-center gap-2 px-7 py-3 rounded-xl bg-slate-900 text-white font-black tracking-wide shadow-md shadow-slate-900/20 hover:bg-black transition-all"
                             >
-                                <BrainCircuit className="w-5 h-5" /> Generate Prediction
+                                <BrainCircuit className="w-5 h-5" /> Confirm & Predict CKD
                             </button>
                         )}
                     </div>

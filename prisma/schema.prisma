@@ -116,6 +116,7 @@ model Patient {
   appointments Appointment[]
   chatThreads  ChatThread[]
   doctorReviews DoctorReview[]
+  labReportExtractions LabReportExtraction[]
 
   @@map("patients")
 }
@@ -356,4 +357,21 @@ model VisitorLog {
 
   @@index([user_id])
   @@map("visitor_logs")
+}
+
+model LabReportExtraction {
+  id              BigInt   @id @default(autoincrement())
+  patient_id      BigInt
+  file_url        String?  @db.VarChar(400)
+  raw_ocr_text    String   @db.Text
+  extracted_json  Json
+  confidence_json Json?
+  status          String   @default("PENDING_REVIEW") @db.VarChar(50)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  patient         Patient  @relation(fields: [patient_id], references: [patient_id])
+
+  @@index([patient_id])
+  @@map("lab_report_extractions")
 }

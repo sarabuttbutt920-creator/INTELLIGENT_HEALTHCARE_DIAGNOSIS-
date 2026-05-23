@@ -42,7 +42,6 @@ const sidebarLinks = {
         { label: "Dashboard", icon: LayoutDashboard, href: "/patient" },
         { label: "My Profile", icon: User, href: "/patient/profile" },
         { label: "New Prediction", icon: Activity, href: "/patient/prediction" },
-        { label: "Medical Imaging", icon: FileImage, href: "/patient/files" },
         { label: "My Reports", icon: FileText, href: "/patient/reports" },
         { label: "Appointments", icon: Calendar, href: "/patient/appointments" },
         { label: "Chat", icon: MessageSquare, href: "/patient/chat" },

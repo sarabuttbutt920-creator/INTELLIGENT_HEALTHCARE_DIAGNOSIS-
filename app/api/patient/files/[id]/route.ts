@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getUserSession } from '@/lib/session';
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const user = await getUserSession();
         if (!user || user.role !== 'PATIENT' || !user.patient) {
             return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
         }
 
-        const fileId = parseInt(params.id);
+        const resolvedParams = await params;
+        const fileId = parseInt(resolvedParams.id);
         if (isNaN(fileId)) {
             return NextResponse.json({ success: false, message: 'Invalid ID' }, { status: 400 });
         }
