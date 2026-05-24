@@ -27,7 +27,9 @@ import {
     BarChart2,
     ListChecks,
     BadgeAlert,
-    BadgeCheck
+    BadgeCheck,
+    UploadCloud,
+    ScanSearch
 } from "lucide-react";
 
 import { differenceInYears, parseISO, format } from "date-fns";
@@ -131,6 +133,18 @@ function NumberInput({
     label: string; unit?: string; placeholder: string; value: string;
     onChange: (v: string) => void; step?: string; info?: string;
 }) {
+    // Strict numeric validation blocking alphabets and negative signs
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', '.', 'Enter'];
+        if (
+            !allowedKeys.includes(e.key) &&
+            (e.key < '0' || e.key > '9') &&
+            !e.ctrlKey && !e.metaKey
+        ) {
+            e.preventDefault();
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -150,9 +164,15 @@ function NumberInput({
                 <input
                     type="number"
                     step={step || "any"}
+                    min="0"
                     placeholder={placeholder}
                     value={value}
-                    onChange={(e) => onChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        if (parseFloat(val) < 0) return; // double check no negatives
+                        onChange(val);
+                    }}
                     className="w-full p-3.5 pr-16 rounded-xl border border-border-light bg-surface focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all text-sm font-medium"
                 />
                 {unit && (
@@ -512,7 +532,7 @@ async function downloadPDFReport(
 
 // ─── Main Page Component ────────────────────────────────────────────────────────
 export default function CkdPrediction({ onBack }: { onBack: () => void }) {
-    // entryMethod removed
+    const [entryMethod, setEntryMethod] = useState<"CHOOSING" | "MANUAL" | "AUTO_FILL">("CHOOSING");
     const [step, setStep] = useState<StepNumber>(1);
     const [formData, setFormData] = useState<PredictionFormData>(initialFormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -523,7 +543,12 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [predictionError, setPredictionError] = useState<string | null>(null);
 
-    // OCR State removed
+    // OCR State
+    const [isExtracting, setIsExtracting] = useState(false);
+    const [ocrActive, setOcrActive] = useState(false);
+    const [ocrMissingFields, setOcrMissingFields] = useState<string[]>([]);
+    const [ocrError, setOcrError] = useState<string | null>(null);
+    const [ocrConfirmed, setOcrConfirmed] = useState(false);
     // Initial load for demographics
     useEffect(() => {
         fetch('/api/patient/profile')
@@ -564,8 +589,43 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
     const nextStep = () => setStep(prev => Math.min(prev + 1, TOTAL_STEPS + 1) as StepNumber);
     const prevStep = () => setStep(prev => Math.max(prev - 1, 1) as StepNumber);
 
+    const handleExtractReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
+        setIsExtracting(true);
+        setOcrError(null);
 
+        const form = new FormData();
+        form.append('file', file);
+
+        try {
+            const res = await fetch('/api/patient/ckd/extract-report', {
+                method: 'POST',
+                body: form
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                // Auto-fill form
+                if (data.extractedFields) {
+                    setFormData(prev => ({ ...prev, ...data.extractedFields }));
+                }
+                setOcrMissingFields(data.missingFields || []);
+                setOcrActive(true);
+                setOcrConfirmed(false);
+                setEntryMethod("AUTO_FILL");
+                setStep(1); // proceed to first step of form
+            } else {
+                setOcrError(data.message || data.error || 'Failed to extract report');
+            }
+        } catch (error) {
+            console.error('Extraction Error:', error);
+            setOcrError('Network error — could not reach extraction service.');
+        } finally {
+            setIsExtracting(false);
+        }
+    };
     
     const handlePredict = async () => {
         setIsSubmitting(true);
@@ -615,7 +675,12 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
         setConfidence(0);
         setPredictionId(null);
         setFeedbackSubmitted(false);
-                                setStep(1);
+        setStep(1);
+        setEntryMethod("CHOOSING");
+        setOcrActive(false);
+        setOcrConfirmed(false);
+        setOcrMissingFields([]);
+        setOcrError(null);
     };
 
     const submitFeedback = async (isCorrect: boolean) => {
@@ -637,6 +702,13 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
         visible: { opacity: 1, x: 0, filter: "blur(0px)", transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] as const } },
         exit: { opacity: 0, x: -30, filter: "blur(4px)", transition: { duration: 0.25 } }
     };
+
+    const isPredictDisabled = 
+        (ocrActive && !ocrConfirmed) ||
+        !formData.age || !formData.gender || 
+        !formData.systolic_bp || !formData.diastolic_bp || 
+        !formData.serum_creatinine || !formData.blood_urea_nitrogen || !formData.egfr || 
+        !formData.albumin_creatinine_ratio || !formData.diabetes || !formData.hypertension;
 
     const progressPercent = ((Math.min(step, TOTAL_STEPS) - 1) / (TOTAL_STEPS - 1)) * 100;
 
@@ -731,8 +803,71 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
 
 
 
+                        {/* ═══════ STEP 0: Entry Method ═══════ */}
+                        {entryMethod === "CHOOSING" && (
+                            <motion.div key="choosing" initial="hidden" animate="visible" exit="exit" variants={stepVariants} className="flex flex-col items-center justify-center py-12 flex-1">
+                                <h2 className="text-2xl font-black text-text-primary mb-8">How would you like to proceed?</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
+                                    <div 
+                                        onClick={() => setEntryMethod("MANUAL")}
+                                        className="cursor-pointer group bg-white border-2 border-slate-200 rounded-3xl p-8 hover:border-primary transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 flex flex-col items-center text-center"
+                                    >
+                                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                            <ClipboardList className="w-8 h-8 text-slate-500 group-hover:text-primary" />
+                                        </div>
+                                        <h3 className="text-lg font-black text-slate-800 mb-2">Fill Form Manually</h3>
+                                        <p className="text-sm text-slate-500 leading-relaxed">Enter your lab report details step-by-step into our guided form.</p>
+                                    </div>
+                                    <div 
+                                        className="relative group bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200 rounded-3xl p-8 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/20 flex flex-col items-center text-center overflow-hidden"
+                                    >
+                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-blue-500" />
+                                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-sm">
+                                            <ScanSearch className="w-8 h-8 text-indigo-500" />
+                                        </div>
+                                        <h3 className="text-lg font-black text-indigo-900 mb-2">Upload Lab Report to Auto-Fill</h3>
+                                        <p className="text-sm text-indigo-700/80 leading-relaxed mb-6">Let our AI extract the required medical values from your image or PDF report automatically.</p>
+                                        
+                                        <label className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold cursor-pointer transition-all ${isExtracting ? "bg-indigo-300 text-white cursor-not-allowed" : "gradient-primary text-white shadow-md shadow-primary/20 hover:shadow-lg"}`}>
+                                            {isExtracting ? (
+                                                <><BrainCircuit className="w-5 h-5 animate-spin" /> Reading report...</>
+                                            ) : (
+                                                <><UploadCloud className="w-5 h-5" /> Select Image / PDF</>
+                                            )}
+                                            <input type="file" className="hidden" accept=".jpg,.jpeg,.png,.pdf" onChange={handleExtractReport} disabled={isExtracting} />
+                                        </label>
+                                        
+                                        {ocrError && (
+                                            <p className="mt-4 text-xs font-bold text-rose-500 bg-rose-50 px-3 py-2 rounded-lg w-full">
+                                                <AlertCircle className="w-3 h-3 inline mr-1 -mt-0.5" />
+                                                {ocrError}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* ═══════ OCR Warning Message ═══════ */}
+                        {ocrActive && step <= TOTAL_STEPS && entryMethod !== "CHOOSING" && (
+                            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <h4 className="text-sm font-bold text-amber-800">Please review extracted values before prediction.</h4>
+                                        <p className="text-xs text-amber-700 mt-1">OCR may make mistakes if the report is blurry. Ensure all fields match your lab report exactly.</p>
+                                        {ocrMissingFields.length > 0 && (
+                                            <p className="text-xs font-semibold text-rose-600 mt-2 bg-rose-50/50 px-2 py-1 rounded inline-block border border-rose-100">
+                                                Missing fields: {ocrMissingFields.join(', ')}. Please fill these manually.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
                         {/* ═══════ STEP 1: Demographics ═══════ */}
-                        {step === 1 && (
+                        {step === 1 && entryMethod !== "CHOOSING" && (
                             <motion.div key="step1" variants={stepVariants} initial="hidden" animate="visible" exit="exit" className="flex-1 space-y-6">
                                 <div className="mb-6 border-b border-border-light pb-4">
                                     <h2 className="text-2xl font-black text-text-primary flex items-center gap-3">
@@ -1348,12 +1483,21 @@ export default function CkdPrediction({ onBack }: { onBack: () => void }) {
                                 Continue <ArrowRight className="w-4 h-4 translate-y-px" />
                             </button>
                         ) : (
-                            <button
-                                onClick={handlePredict}
-                                className="flex items-center gap-2 px-7 py-3 rounded-xl bg-slate-900 text-white font-black tracking-wide shadow-md shadow-slate-900/20 hover:bg-black transition-all"
-                            >
-                                <BrainCircuit className="w-5 h-5" /> Confirm & Predict CKD
-                            </button>
+                            <div className="flex items-center gap-4">
+                                {ocrActive && (
+                                    <label className="flex items-center gap-2 cursor-pointer bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                                        <input type="checkbox" checked={ocrConfirmed} onChange={(e) => setOcrConfirmed(e.target.checked)} className="w-4 h-4 accent-amber-600 rounded" />
+                                        <span className="text-sm font-bold text-amber-800">I confirm the values are correct</span>
+                                    </label>
+                                )}
+                                <button
+                                    onClick={handlePredict}
+                                    disabled={isPredictDisabled || isSubmitting}
+                                    className={`flex items-center gap-2 px-7 py-3 rounded-xl font-black tracking-wide shadow-md transition-all ${isPredictDisabled || isSubmitting ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-slate-900 text-white shadow-slate-900/20 hover:bg-black'}`}
+                                >
+                                    <BrainCircuit className="w-5 h-5" /> Confirm & Predict CKD
+                                </button>
+                            </div>
                         )}
                     </div>
                 )}
