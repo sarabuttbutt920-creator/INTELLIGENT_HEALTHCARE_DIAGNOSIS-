@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Activity } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
+import BrandLogo from "@/app/components/BrandLogo";
 
 /* Navigation menu items */
 const navItems = [
@@ -39,15 +40,10 @@ export default function Navbar() {
                     {/* Logo */}
                     <motion.a
                         href="#home"
-                        className="flex items-center gap-2 group"
+                        className="group"
                         whileHover={{ scale: 1.02 }}
                     >
-                        <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-                            <Activity className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-xl font-bold text-text-primary tracking-tight">
-                            IH<span className="gradient-text">DS</span>
-                        </span>
+                        <BrandLogo />
                     </motion.a>
 
                     {/* Desktop Navigation */}

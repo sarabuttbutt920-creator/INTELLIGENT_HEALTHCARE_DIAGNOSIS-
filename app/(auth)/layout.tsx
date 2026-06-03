@@ -1,9 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, ShieldCheck, ArrowLeft } from "lucide-react";
+import { ShieldCheck, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import BrandLogo from "@/app/components/BrandLogo";
 
 export default function AuthLayout({
     children,
@@ -46,12 +47,10 @@ export default function AuthLayout({
                         transition={{ duration: 0.6 }}
                         className="flex items-center gap-2 mb-8"
                     >
-                        <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                            <Activity className="w-6 h-6 text-white" />
-                        </div>
-                        <span className="text-2xl font-bold tracking-tight text-white">
-                            IH<span className="text-primary-light">DS</span>
-                        </span>
+                        <BrandLogo
+                            markClassName="w-12 h-12"
+                            textClassName="text-2xl font-bold tracking-tight text-white"
+                        />
                     </motion.div>
 
                     <motion.h2

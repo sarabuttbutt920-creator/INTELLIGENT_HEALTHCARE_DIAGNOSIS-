@@ -1,18 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, ShieldCheck, ArrowLeft } from "lucide-react";
+import { ShieldCheck, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import BrandLogo from "@/app/components/BrandLogo";
 
 export default function AuthLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const pathname = usePathname();
-    const isLogin = pathname === "/login";
-
     return (
         <div className="min-h-screen grid lg:grid-cols-2 bg-white">
             {/* Left Side - Visual/Marketing */}
@@ -32,12 +29,10 @@ export default function AuthLayout({
 
                 <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-8">
-                        <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                            <Activity className="w-6 h-6 text-white" />
-                        </div>
-                        <span className="text-2xl font-bold tracking-tight text-white">
-                            IH<span className="text-primary-light">DS</span>
-                        </span>
+                        <BrandLogo
+                            markClassName="w-12 h-12"
+                            textClassName="text-2xl font-bold tracking-tight text-white"
+                        />
                     </div>
 
                     <h2 className="text-4xl font-bold text-white mb-6 leading-tight">

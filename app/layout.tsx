@@ -15,6 +15,10 @@ export const metadata: Metadata = {
   title: "IHDS — Intelligent Healthcare Diagnosis System",
   description:
     "AI-powered kidney disease prediction platform providing trusted medical care with intelligent diagnostics, expert doctors, and personalized healthcare solutions.",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
   keywords: [
     "healthcare",
     "kidney disease",

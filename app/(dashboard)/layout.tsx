@@ -25,6 +25,7 @@ import {
     History,
     FileImage
 } from "lucide-react";
+import BrandLogo from "@/app/components/BrandLogo";
 
 const sidebarLinks = {
     ADMIN: [
@@ -153,14 +154,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div>
                         {/* Logo */}
                         <div className={`px-6 mb-10 flex items-center ${isSidebarOpen ? "gap-3" : "justify-center"}`}>
-                            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
-                                <Activity className="w-5 h-5 text-white" />
-                            </div>
-                            {isSidebarOpen && (
-                                <span className="text-xl font-bold tracking-tight text-text-primary">
-                                    IH<span className="gradient-text">DS</span>
-                                </span>
-                            )}
+                            <BrandLogo showText={isSidebarOpen} />
                         </div>
 
                         {/* Navigation Links */}
@@ -239,10 +233,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Mobile Header */}
             <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-border-light z-40 px-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Activity className="w-6 h-6 text-primary" />
-                    <span className="font-bold">IHDS</span>
-                </div>
+                <BrandLogo markClassName="w-8 h-8" textClassName="font-bold text-text-primary" />
                 <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-lg bg-surface">
                     {isMobileMenuOpen ? <X /> : <Menu />}
                 </button>
@@ -371,10 +362,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div className="flex items-center gap-3 mb-10">
-                                <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-                                    <Activity className="w-5 h-5 text-white" />
-                                </div>
-                                <span className="text-xl font-bold tracking-tight">IHDS</span>
+                                <BrandLogo textClassName="text-xl font-bold tracking-tight text-text-primary" />
                             </div>
 
                             {role === 'DOCTOR' && doctorProfile && (

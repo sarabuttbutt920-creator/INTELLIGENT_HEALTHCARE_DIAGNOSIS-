@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import {
-    Activity,
     Mail,
     Phone,
     MapPin,
@@ -12,6 +11,7 @@ import {
     Instagram,
     ArrowUp,
 } from "lucide-react";
+import BrandLogo from "@/app/components/BrandLogo";
 
 /* Footer link groups */
 const quickLinks = [
@@ -55,12 +55,7 @@ export default function Footer() {
                         transition={{ duration: 0.5 }}
                     >
                         <div className="flex items-center gap-2 mb-5">
-                            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-                                <Activity className="w-5 h-5 text-white" />
-                            </div>
-                            <span className="text-xl font-bold tracking-tight">
-                                IH<span className="text-primary-light">DS</span>
-                            </span>
+                            <BrandLogo textClassName="text-xl font-bold tracking-tight text-white" />
                         </div>
                         <p className="text-gray-400 text-sm leading-relaxed mb-6">
                             Intelligent Healthcare Diagnosis System — powered by AI to predict
